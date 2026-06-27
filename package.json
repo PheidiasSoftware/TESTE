@@ -1,0 +1,24 @@
+{
+  "name": "teste-local-code-llm-backend",
+  "version": "0.1.0",
+  "description": "Backend leve para uma LLM/SLM local focada em programação em PCs com 8 GB de RAM e sem GPU.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "llm",
+    "backend",
+    "ollama",
+    "nodejs",
+    "low-memory"
+  ],
+  "author": "PheidiasSoftware",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -63,3 +63,67 @@ Criar um MVP inicial de backend local leve para geração de respostas de progra
 ### Próximos passos sugeridos
 
 Na próxima execução segura, priorizar testes básicos e uma fila simples de concorrência 1 para proteger PCs sem GPU.
+
+## 2026-06-27 17:36 - Fila de geração para CPU fraca
+
+### Avaliação inicial desta execução
+
+- Repositório analisado novamente antes de qualquer alteração.
+- Arquivos conferidos: `README.md`, `package.json`, `src/server.js` e `memory.md`.
+- `README.md` indicava backend local leve com Ollama e próximos passos, incluindo fila simples.
+- `package.json` continuava sem dependências externas, com scripts `start`, `dev` e `test`.
+- `src/server.js` já tinha servidor HTTP nativo, `/health`, `/api/generate`, limite de payload e timeout.
+- `memory.md` apontava como próximo passo prioritário a fila de concorrência 1 para proteger PC sem GPU.
+- Busca no repositório não encontrou registros claros de Claude Agent, PRs ou instruções conflitantes nesta execução.
+
+### Decisão tomada
+
+Implementar uma melhoria pequena e segura no backend: fila simples de geração com concorrência padrão 1 e limite pequeno de espera, mantendo o projeto sem dependências externas.
+
+### Arquivos alterados
+
+- `src/server.js`
+  - Adicionadas variáveis `MAX_QUEUE_SIZE` e `GENERATION_CONCURRENCY`.
+  - Criada fila em memória para chamadas ao Ollama.
+  - Adicionado bloqueio por fila cheia com erro HTTP `429`.
+  - Adicionadas métricas simples: gerações ativas, pendentes, concluídas e com falha.
+  - `GET /health` passou a retornar estado da fila.
+  - Criado endpoint `GET /api/status`.
+  - `POST /api/generate` passou a usar a fila antes de chamar o modelo.
+
+- `README.md`
+  - Documentadas as novas variáveis de fila.
+  - Documentado `GET /api/status`.
+  - Adicionada seção de proteção para PC fraco.
+  - Atualizados próximos passos, removendo a fila da lista pendente.
+
+- `memory.md`
+  - Registrada esta execução, avaliação, decisão, alterações, validações, riscos e próximos passos.
+
+### Validações executadas
+
+- Validação estática manual do fluxo da fila.
+- Conferido que a alteração mantém Node.js nativo sem dependências externas.
+- Conferido que o padrão continua conservador para PC com 8 GB RAM e sem GPU: `GENERATION_CONCURRENCY=1`.
+- Não foi possível executar `npm test` ou iniciar o servidor pelo conector GitHub nesta execução.
+
+### Riscos e observações
+
+- A fila é em memória e reinicia junto com o processo, o que é aceitável para MVP local.
+- Requisições HTTP ficam aguardando enquanto estão na fila; isso é simples e adequado para uso local, mas no futuro pode ser substituído por jobs assíncronos.
+- O cálculo de `queueWaitMs` é aproximado porque depende do tempo reportado pelo Ollama quando disponível.
+- Ainda não há testes automatizados para validar a fila.
+
+### Pendências atualizadas
+
+1. Adicionar testes básicos com `node --test`.
+2. Adicionar endpoint de streaming opcional.
+3. Implementar cache simples por hash de prompt.
+4. Criar leitura segura de arquivos do projeto com limites e allowlist.
+5. Criar scripts Windows para instalação/execução.
+6. Documentar integração futura com plugin/extensão VS Code.
+7. Separar servidor e funções puras em módulos menores para facilitar testes.
+
+### Próximos passos sugeridos
+
+Na próxima execução segura, priorizar refatoração mínima para tornar funções testáveis e adicionar testes básicos com `node --test`, sem dependências externas.

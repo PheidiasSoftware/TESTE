@@ -7,6 +7,16 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const MODEL = process.env.MODEL || 'qwen2.5-coder:1.5b-instruct';
 const MAX_BODY_BYTES = Number.parseInt(process.env.MAX_BODY_BYTES || '65536', 10);
 const REQUEST_TIMEOUT_MS = Number.parseInt(process.env.REQUEST_TIMEOUT_MS || '120000', 10);
+const MAX_QUEUE_SIZE = Number.parseInt(process.env.MAX_QUEUE_SIZE || '4', 10);
+const GENERATION_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.GENERATION_CONCURRENCY || '1', 10)
+);
+
+const generationQueue = [];
+let activeGenerations = 0;
+let completedGenerations = 0;
+let failedGenerations = 0;
 
 function sendJson(response, statusCode, payload) {
   const body = JSON.stringify(payload, null, 2);
@@ -47,6 +57,51 @@ function readJsonBody(request) {
 
     request.on('error', reject);
   });
+}
+
+function getQueueStatus() {
+  return {
+    activeGenerations,
+    queuedGenerations: generationQueue.length,
+    maxQueueSize: MAX_QUEUE_SIZE,
+    generationConcurrency: GENERATION_CONCURRENCY,
+    completedGenerations,
+    failedGenerations
+  };
+}
+
+function runQueuedGeneration(job) {
+  return new Promise((resolve, reject) => {
+    if (generationQueue.length >= MAX_QUEUE_SIZE) {
+      reject(Object.assign(new Error('Fila de geração cheia. Tente novamente em alguns instantes.'), { statusCode: 429 }));
+      return;
+    }
+
+    generationQueue.push({ job, resolve, reject });
+    drainGenerationQueue();
+  });
+}
+
+function drainGenerationQueue() {
+  while (activeGenerations < GENERATION_CONCURRENCY && generationQueue.length > 0) {
+    const item = generationQueue.shift();
+    activeGenerations += 1;
+
+    Promise.resolve()
+      .then(item.job)
+      .then(result => {
+        completedGenerations += 1;
+        item.resolve(result);
+      })
+      .catch(error => {
+        failedGenerations += 1;
+        item.reject(error);
+      })
+      .finally(() => {
+        activeGenerations -= 1;
+        drainGenerationQueue();
+      });
+  }
 }
 
 function buildCodingPrompt({ task, language = 'general', context = '' }) {
@@ -112,20 +167,25 @@ async function handleGenerate(request, response) {
       context: typeof body.context === 'string' ? body.context.slice(0, 12000) : ''
     });
 
-    const result = await callOllamaGenerate(prompt, controller.signal);
+    const queuedAt = Date.now();
+    const result = await runQueuedGeneration(() => callOllamaGenerate(prompt, controller.signal));
+
     sendJson(response, 200, {
       requestId,
       model: MODEL,
       durationMs: Date.now() - startedAt,
+      queueWaitMs: Date.now() - queuedAt - (result.total_duration ? Math.round(result.total_duration / 1_000_000) : 0),
       response: result.response || '',
-      done: Boolean(result.done)
+      done: Boolean(result.done),
+      queue: getQueueStatus()
     });
   } catch (error) {
     const aborted = error?.name === 'AbortError';
     sendJson(response, aborted ? 504 : error.statusCode || 500, {
       error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
       detail: error.detail,
-      requestId
+      requestId,
+      queue: getQueueStatus()
     });
   } finally {
     clearTimeout(timeout);
@@ -141,7 +201,18 @@ const server = createServer(async (request, response) => {
         status: 'ok',
         service: 'teste-local-code-llm-backend',
         model: MODEL,
-        ollamaUrl: OLLAMA_URL
+        ollamaUrl: OLLAMA_URL,
+        queue: getQueueStatus()
+      });
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/status') {
+      sendJson(response, 200, {
+        service: 'teste-local-code-llm-backend',
+        model: MODEL,
+        ollamaUrl: OLLAMA_URL,
+        queue: getQueueStatus()
       });
       return;
     }
@@ -153,7 +224,7 @@ const server = createServer(async (request, response) => {
 
     sendJson(response, 404, {
       error: 'Rota não encontrada.',
-      routes: ['GET /health', 'POST /api/generate']
+      routes: ['GET /health', 'GET /api/status', 'POST /api/generate']
     });
   } catch (error) {
     sendJson(response, error.statusCode || 500, {
@@ -165,4 +236,5 @@ const server = createServer(async (request, response) => {
 server.listen(PORT, HOST, () => {
   console.log(`Backend local ouvindo em http://${HOST}:${PORT}`);
   console.log(`Modelo configurado: ${MODEL}`);
+  console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
 });

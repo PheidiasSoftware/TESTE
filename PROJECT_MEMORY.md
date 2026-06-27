@@ -61,3 +61,66 @@ Executar uma melhoria incremental e reversível: exportar funções puras do bac
 ### Próximo passo sugerido
 
 Na próxima execução segura, priorizar testes de rotas HTTP locais sem Ollama ou criar scripts Windows de inicialização, mantendo o projeto leve e sem dependências externas.
+
+## 2026-06-27 19:35 - Testes HTTP locais sem Ollama
+
+### Avaliação inicial
+
+- Repositório analisado antes de qualquer alteração.
+- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `memory.md` e `PROJECT_MEMORY.md`.
+- `README.md` já documentava backend leve com Ollama, fila, endpoints, testes básicos e próximos passos.
+- `package.json` continuava sem dependências externas e com `npm test` usando `node --test`.
+- `src/server.js` já exportava `server`, `buildCodingPrompt()` e `createGenerationQueue()`, permitindo testar sem iniciar o servidor por importação.
+- `test/server.test.js` cobria prompt e fila, mas ainda não cobria rotas HTTP reais.
+- `memory.md` e `PROJECT_MEMORY.md` indicavam como próximo passo expandir testes para rotas locais sem depender do Ollama.
+- Busca no repositório não retornou resultados indexados para Claude Agent ou arquivos semelhantes; também não foram encontrados PRs recentes no repositório pelo conector.
+
+### Decisão tomada
+
+Executar uma melhoria pequena, segura e reversível: adicionar testes de rotas HTTP locais usando o servidor exportado e porta dinâmica, sem chamar Ollama e sem adicionar dependências externas.
+
+### Arquivos alterados
+
+- `test/server.test.js`
+  - Importado `server` do backend.
+  - Criado helper `withTestServer()` para iniciar o servidor em `127.0.0.1` com porta dinâmica e fechar ao final do teste.
+  - Adicionado teste para `GET /health`.
+  - Adicionado teste para `GET /api/status`.
+  - Adicionado teste para `POST /api/generate` com `task` ausente, validando erro `400` antes de chamar Ollama.
+  - Adicionado teste para rota desconhecida com resposta `404` e lista de rotas disponíveis.
+
+- `README.md`
+  - Atualizada seção de testes para explicar que agora há cobertura de rotas HTTP locais.
+  - Atualizadas decisões de arquitetura.
+  - Atualizados próximos passos para remover a pendência de testes HTTP básicos.
+
+- `PROJECT_MEMORY.md`
+  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos, pendências e próximo passo.
+
+### Validações executadas
+
+- Validação estática manual dos testes adicionados.
+- Conferido que os novos testes usam somente recursos nativos do Node.js 20+: `node:test`, `assert`, `fetch` global e servidor HTTP exportado.
+- Conferido que os testes novos não chamam `/api/generate` com `task` válido, evitando chamada ao Ollama.
+- Conferido que a alteração não adiciona dependências externas.
+- Não foi possível executar `npm test` diretamente pelo conector GitHub; validação final deve ser feita localmente ou por CI futuro.
+
+### Riscos
+
+- Os testes iniciam o servidor exportado em porta dinâmica e fecham após cada teste. Em ambiente de teste muito paralelo, pode ser necessário tornar os testes HTTP sequenciais explicitamente ou criar fábrica de servidor no futuro.
+- Ainda não há CI configurado para validar `npm test` automaticamente.
+- O backend ainda não possui streaming, cache ou leitura segura de arquivos do projeto.
+
+### Pendências atualizadas
+
+1. Executar `npm test` localmente em Windows/Node.js 20+.
+2. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
+3. Implementar cache simples por hash de prompt para economizar CPU em perguntas repetidas.
+4. Criar leitura segura de arquivos do projeto com allowlist, limite de tamanho e bloqueio de caminhos perigosos.
+5. Criar scripts Windows para instalação/execução do Ollama e backend.
+6. Documentar integração futura com plugin/extensão VS Code.
+7. Considerar CI leve com GitHub Actions usando Node.js 20 quando o repositório estiver pronto para validação automática.
+
+### Próximo passo sugerido
+
+Na próxima execução segura, priorizar cache simples por hash de prompt ou scripts Windows de inicialização, mantendo a regra de não adicionar dependências pesadas e de proteger PC com 8 GB RAM sem GPU.

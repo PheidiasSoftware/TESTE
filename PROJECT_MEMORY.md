@@ -124,3 +124,68 @@ Executar uma melhoria pequena, segura e reversível: adicionar testes de rotas H
 ### Próximo passo sugerido
 
 Na próxima execução segura, priorizar cache simples por hash de prompt ou scripts Windows de inicialização, mantendo a regra de não adicionar dependências pesadas e de proteger PC com 8 GB RAM sem GPU.
+
+## 2026-06-27 20:37 - Cache leve por hash de prompt
+
+### Avaliação inicial
+
+- Repositório analisado antes de qualquer alteração.
+- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `memory.md` e `PROJECT_MEMORY.md`.
+- `README.md` documentava backend local com Ollama, fila, testes, endpoints e indicava cache como próximo passo.
+- `package.json` continuava sem dependências externas, com `node --test`.
+- `src/server.js` possuía servidor HTTP nativo, fila de geração, timeout, limite de payload, prompt técnico e rotas `/health`, `/api/status`, `/api/generate`.
+- `test/server.test.js` já cobria prompt, fila e rotas HTTP locais sem chamar Ollama.
+- `PROJECT_MEMORY.md` indicava como próximo passo seguro implementar cache simples por hash de prompt ou scripts Windows.
+- Não foram encontrados registros claros de Claude Agent, branches, issues, PRs ou instruções conflitantes nos arquivos analisados nesta execução.
+
+### Decisão tomada
+
+Implementar cache em memória pequeno e reversível por hash SHA-256 do prompt final. A melhoria reduz chamadas repetidas ao Ollama, economizando CPU em PC fraco, sem adicionar dependências externas e sem persistir dados em disco.
+
+### Arquivos alterados
+
+- `src/server.js`
+  - Adicionado `createPromptCache()` exportado para testes.
+  - Adicionadas variáveis `ENABLE_PROMPT_CACHE` e `MAX_CACHE_ENTRIES`.
+  - Criado cache em memória com política simples de remoção do item mais antigo quando passa do limite.
+  - `POST /api/generate` agora verifica cache antes de entrar na fila e grava respostas bem-sucedidas após chamada ao Ollama.
+  - Respostas de geração passaram a incluir `cached`, `cacheKey` e métricas de cache.
+  - `GET /health` e `GET /api/status` passaram a retornar estado do cache.
+
+- `test/server.test.js`
+  - Importado `createPromptCache()`.
+  - Criado teste de reaproveitamento por hash e limite de entradas.
+  - Ajustados testes de `/health` e `/api/status` para validar métricas de cache.
+
+- `README.md`
+  - Documentadas as variáveis `ENABLE_PROMPT_CACHE` e `MAX_CACHE_ENTRIES`.
+  - Explicado o comportamento de `cached: true` em `/api/generate`.
+  - Atualizadas seções de proteção para PC fraco, decisões de arquitetura e próximos passos.
+
+### Validações executadas
+
+- Validação estática manual do fluxo de cache antes da fila.
+- Conferido que o cache usa apenas módulos nativos do Node.js (`node:crypto`) e não adiciona dependências.
+- Conferido que falhas do Ollama não são gravadas em cache.
+- Conferido que o cache é limitado por número de entradas para evitar crescimento ilimitado de memória.
+- Não foi possível executar `npm test` diretamente pelo conector GitHub; validação final deve ser feita localmente ou por CI futuro.
+
+### Riscos
+
+- O cache é em memória e reinicia junto com o processo, o que é intencional para manter o MVP simples.
+- O cache considera o prompt final completo; pequenas diferenças em `task`, `language` ou `context` geram chaves diferentes.
+- Como as respostas ficam em memória, o limite `MAX_CACHE_ENTRIES` deve permanecer baixo em PC com 8 GB RAM.
+- Ainda não há CI automático para validar os testes após cada commit.
+
+### Pendências atualizadas
+
+1. Executar `npm test` localmente em Windows/Node.js 20+.
+2. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
+3. Criar leitura segura de arquivos do projeto com allowlist, limite de tamanho e bloqueio de caminhos perigosos.
+4. Criar scripts Windows para instalação/execução do Ollama e backend.
+5. Documentar integração futura com plugin/extensão VS Code.
+6. Considerar CI leve com GitHub Actions usando Node.js 20 quando o repositório estiver pronto para validação automática.
+
+### Próximo passo sugerido
+
+Na próxima execução segura, priorizar scripts Windows de inicialização ou leitura segura de arquivos do projeto, mantendo o backend leve, local e sem execução automática de código do usuário.

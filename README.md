@@ -37,6 +37,16 @@ Servidor padrão:
 http://127.0.0.1:3131
 ```
 
+## Testes
+
+O projeto usa o test runner nativo do Node.js, sem dependências externas:
+
+```bash
+npm test
+```
+
+Os testes atuais validam funções puras do backend, incluindo montagem do prompt e comportamento da fila de geração. Eles não chamam o Ollama, então podem rodar mesmo em máquina fraca ou sem modelo instalado.
+
 ## Variáveis de ambiente
 
 | Variável | Padrão | Uso |
@@ -102,12 +112,13 @@ MAX_QUEUE_SIZE=4
 - Limite de payload para evitar uso excessivo de memória.
 - Timeout para evitar travamento em PC fraco.
 - Fila de concorrência baixa para evitar múltiplas inferências simultâneas.
+- Funções de prompt e fila exportadas para testes unitários sem iniciar servidor nem chamar Ollama.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
 
 ## Próximos passos
 
-- Adicionar testes com `node --test`.
-- Adicionar streaming em endpoint separado.
+- Adicionar endpoint de streaming em rota separada.
 - Criar cache opcional por hash de prompt.
 - Adicionar leitura segura de arquivos com allowlist e limite de tamanho.
 - Adicionar scripts Windows para iniciar Ollama e backend.
+- Expandir testes para rotas HTTP locais sem depender do Ollama.

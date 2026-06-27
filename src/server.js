@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number.parseInt(process.env.PORT || '3131', 10);
@@ -13,10 +14,69 @@ const GENERATION_CONCURRENCY = Math.max(
   Number.parseInt(process.env.GENERATION_CONCURRENCY || '1', 10)
 );
 
-const generationQueue = [];
-let activeGenerations = 0;
-let completedGenerations = 0;
-let failedGenerations = 0;
+export function createGenerationQueue({ maxQueueSize = 4, generationConcurrency = 1 } = {}) {
+  const queue = [];
+  const metrics = {
+    activeGenerations: 0,
+    completedGenerations: 0,
+    failedGenerations: 0
+  };
+
+  function getStatus() {
+    return {
+      activeGenerations: metrics.activeGenerations,
+      queuedGenerations: queue.length,
+      maxQueueSize,
+      generationConcurrency,
+      completedGenerations: metrics.completedGenerations,
+      failedGenerations: metrics.failedGenerations
+    };
+  }
+
+  function drain() {
+    while (metrics.activeGenerations < generationConcurrency && queue.length > 0) {
+      const item = queue.shift();
+      metrics.activeGenerations += 1;
+
+      Promise.resolve()
+        .then(item.job)
+        .then(result => {
+          metrics.completedGenerations += 1;
+          item.resolve(result);
+        })
+        .catch(error => {
+          metrics.failedGenerations += 1;
+          item.reject(error);
+        })
+        .finally(() => {
+          metrics.activeGenerations -= 1;
+          drain();
+        });
+    }
+  }
+
+  function run(job) {
+    return new Promise((resolve, reject) => {
+      if (queue.length >= maxQueueSize) {
+        reject(Object.assign(new Error('Fila de geração cheia. Tente novamente em alguns instantes.'), { statusCode: 429 }));
+        return;
+      }
+
+      queue.push({ job, resolve, reject });
+      drain();
+    });
+  }
+
+  return {
+    run,
+    getStatus
+  };
+}
+
+const generationQueue = createGenerationQueue({
+  maxQueueSize: MAX_QUEUE_SIZE,
+  generationConcurrency: GENERATION_CONCURRENCY
+});
 
 function sendJson(response, statusCode, payload) {
   const body = JSON.stringify(payload, null, 2);
@@ -60,51 +120,10 @@ function readJsonBody(request) {
 }
 
 function getQueueStatus() {
-  return {
-    activeGenerations,
-    queuedGenerations: generationQueue.length,
-    maxQueueSize: MAX_QUEUE_SIZE,
-    generationConcurrency: GENERATION_CONCURRENCY,
-    completedGenerations,
-    failedGenerations
-  };
+  return generationQueue.getStatus();
 }
 
-function runQueuedGeneration(job) {
-  return new Promise((resolve, reject) => {
-    if (generationQueue.length >= MAX_QUEUE_SIZE) {
-      reject(Object.assign(new Error('Fila de geração cheia. Tente novamente em alguns instantes.'), { statusCode: 429 }));
-      return;
-    }
-
-    generationQueue.push({ job, resolve, reject });
-    drainGenerationQueue();
-  });
-}
-
-function drainGenerationQueue() {
-  while (activeGenerations < GENERATION_CONCURRENCY && generationQueue.length > 0) {
-    const item = generationQueue.shift();
-    activeGenerations += 1;
-
-    Promise.resolve()
-      .then(item.job)
-      .then(result => {
-        completedGenerations += 1;
-        item.resolve(result);
-      })
-      .catch(error => {
-        failedGenerations += 1;
-        item.reject(error);
-      })
-      .finally(() => {
-        activeGenerations -= 1;
-        drainGenerationQueue();
-      });
-  }
-}
-
-function buildCodingPrompt({ task, language = 'general', context = '' }) {
+export function buildCodingPrompt({ task, language = 'general', context = '' }) {
   return [
     'Você é uma SLM local focada em programação para PC fraco, sem GPU.',
     'Responda de forma objetiva, segura, com código simples e pouca memória.',
@@ -168,7 +187,7 @@ async function handleGenerate(request, response) {
     });
 
     const queuedAt = Date.now();
-    const result = await runQueuedGeneration(() => callOllamaGenerate(prompt, controller.signal));
+    const result = await generationQueue.run(() => callOllamaGenerate(prompt, controller.signal));
 
     sendJson(response, 200, {
       requestId,
@@ -192,7 +211,7 @@ async function handleGenerate(request, response) {
   }
 }
 
-const server = createServer(async (request, response) => {
+export const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url || '/', `http://${request.headers.host || HOST}`);
 
@@ -233,8 +252,16 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Backend local ouvindo em http://${HOST}:${PORT}`);
-  console.log(`Modelo configurado: ${MODEL}`);
-  console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
-});
+function startServer() {
+  server.listen(PORT, HOST, () => {
+    console.log(`Backend local ouvindo em http://${HOST}:${PORT}`);
+    console.log(`Modelo configurado: ${MODEL}`);
+    console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
+  });
+}
+
+const isEntryPoint = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isEntryPoint) {
+  startServer();
+}

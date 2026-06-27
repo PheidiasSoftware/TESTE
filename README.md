@@ -49,6 +49,7 @@ Os testes atuais validam:
 
 - montagem do prompt técnico sem chamar Ollama;
 - fila de geração, limite de fila cheia e concorrência conservadora;
+- cache simples por hash de prompt, incluindo reaproveitamento e limite de entradas;
 - rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida e rota 404.
 
 Esses testes não chamam o Ollama nem exigem modelo instalado, então podem rodar em máquina fraca apenas com Node.js 20+.
@@ -65,12 +66,14 @@ Esses testes não chamam o Ollama nem exigem modelo instalado, então podem roda
 | `REQUEST_TIMEOUT_MS` | `120000` | Timeout da chamada ao modelo |
 | `MAX_QUEUE_SIZE` | `4` | Quantidade máxima de pedidos aguardando geração |
 | `GENERATION_CONCURRENCY` | `1` | Gerações simultâneas; manter `1` em PC fraco sem GPU |
+| `ENABLE_PROMPT_CACHE` | `true` | Ativa cache em memória para prompts repetidos |
+| `MAX_CACHE_ENTRIES` | `20` | Quantidade máxima de respostas em cache |
 
 ## Endpoints
 
 ### `GET /health`
 
-Retorna estado básico do backend e situação da fila.
+Retorna estado básico do backend, situação da fila e métricas do cache.
 
 ```bash
 curl http://127.0.0.1:3131/health
@@ -78,7 +81,7 @@ curl http://127.0.0.1:3131/health
 
 ### `GET /api/status`
 
-Retorna métricas simples de uso da fila, incluindo gerações ativas, pendentes, concluídas e falhas.
+Retorna métricas simples de uso da fila e do cache, incluindo gerações ativas, pendentes, concluídas, falhas, acertos e descartes de cache.
 
 ```bash
 curl http://127.0.0.1:3131/api/status
@@ -100,16 +103,24 @@ Campos aceitos:
 - `language` opcional: foco técnico, por exemplo `Node.js`, `Dart`, `Flutter`, `MySQL`.
 - `context` opcional: trecho controlado do projeto.
 
+A resposta informa `cached: true` quando a resposta veio do cache local em memória.
+
 ## Proteção para PC fraco
 
 O backend usa uma fila simples de geração para evitar sobrecarregar CPU e RAM. Por padrão, apenas uma geração roda por vez (`GENERATION_CONCURRENCY=1`) e até quatro ficam aguardando (`MAX_QUEUE_SIZE=4`). Quando a fila enche, a API responde `429` em vez de deixar o computador travar.
+
+Também existe cache em memória por hash de prompt. Em perguntas repetidas, o backend pode responder sem chamar o Ollama novamente, economizando CPU. O cache é pequeno por padrão (`MAX_CACHE_ENTRIES=20`) e é perdido ao reiniciar o backend, o que mantém o MVP simples e reversível.
 
 Para máquina com 8 GB RAM e sem GPU, recomenda-se manter:
 
 ```text
 GENERATION_CONCURRENCY=1
 MAX_QUEUE_SIZE=4
+ENABLE_PROMPT_CACHE=true
+MAX_CACHE_ENTRIES=20
 ```
+
+Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES` ou desative com `ENABLE_PROMPT_CACHE=false`.
 
 ## Decisões de arquitetura
 
@@ -118,14 +129,15 @@ MAX_QUEUE_SIZE=4
 - Limite de payload para evitar uso excessivo de memória.
 - Timeout para evitar travamento em PC fraco.
 - Fila de concorrência baixa para evitar múltiplas inferências simultâneas.
-- Funções de prompt, fila e servidor exportadas para testes sem iniciar o processo via `npm start`.
+- Cache em memória pequeno para economizar CPU em prompts repetidos.
+- Funções de prompt, cache, fila e servidor exportadas para testes sem iniciar o processo via `npm start`.
 - Rotas HTTP básicas testadas sem depender do Ollama.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
 
 ## Próximos passos
 
 - Adicionar endpoint de streaming em rota separada.
-- Criar cache opcional por hash de prompt.
 - Adicionar leitura segura de arquivos com allowlist e limite de tamanho.
 - Adicionar scripts Windows para iniciar Ollama e backend.
 - Documentar integração futura com plugin/extensão VS Code.
+- Considerar CI leve com GitHub Actions usando Node.js 20.

@@ -45,7 +45,13 @@ O projeto usa o test runner nativo do Node.js, sem dependências externas:
 npm test
 ```
 
-Os testes atuais validam funções puras do backend, incluindo montagem do prompt e comportamento da fila de geração. Eles não chamam o Ollama, então podem rodar mesmo em máquina fraca ou sem modelo instalado.
+Os testes atuais validam:
+
+- montagem do prompt técnico sem chamar Ollama;
+- fila de geração, limite de fila cheia e concorrência conservadora;
+- rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida e rota 404.
+
+Esses testes não chamam o Ollama nem exigem modelo instalado, então podem rodar em máquina fraca apenas com Node.js 20+.
 
 ## Variáveis de ambiente
 
@@ -112,7 +118,8 @@ MAX_QUEUE_SIZE=4
 - Limite de payload para evitar uso excessivo de memória.
 - Timeout para evitar travamento em PC fraco.
 - Fila de concorrência baixa para evitar múltiplas inferências simultâneas.
-- Funções de prompt e fila exportadas para testes unitários sem iniciar servidor nem chamar Ollama.
+- Funções de prompt, fila e servidor exportadas para testes sem iniciar o processo via `npm start`.
+- Rotas HTTP básicas testadas sem depender do Ollama.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
 
 ## Próximos passos
@@ -121,4 +128,4 @@ MAX_QUEUE_SIZE=4
 - Criar cache opcional por hash de prompt.
 - Adicionar leitura segura de arquivos com allowlist e limite de tamanho.
 - Adicionar scripts Windows para iniciar Ollama e backend.
-- Expandir testes para rotas HTTP locais sem depender do Ollama.
+- Documentar integração futura com plugin/extensão VS Code.

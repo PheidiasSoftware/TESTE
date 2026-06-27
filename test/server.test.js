@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildCodingPrompt, createGenerationQueue, server } from '../src/server.js';
+import { buildCodingPrompt, createGenerationQueue, createPromptCache, server } from '../src/server.js';
 
 async function withTestServer(callback) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -76,6 +76,23 @@ test('createGenerationQueue respeita concorrência um em PC fraco', async () => 
   assert.deepEqual(order, ['first-start', 'first-end', 'second-start', 'second-end']);
 });
 
+test('createPromptCache reutiliza resposta por hash e limita entradas', () => {
+  const cache = createPromptCache({ enabled: true, maxEntries: 1 });
+
+  assert.equal(cache.get('prompt A'), null);
+  const firstKey = cache.set('prompt A', { response: 'resposta A', done: true });
+  const cachedA = cache.get('prompt A');
+
+  assert.equal(typeof firstKey, 'string');
+  assert.equal(cachedA.key, firstKey);
+  assert.deepEqual(cachedA.value, { response: 'resposta A', done: true });
+
+  cache.set('prompt B', { response: 'resposta B', done: true });
+  assert.equal(cache.get('prompt A'), null);
+  assert.equal(cache.getStatus().entries, 1);
+  assert.equal(cache.getStatus().evictions, 1);
+});
+
 test('GET /health responde estado local sem chamar Ollama', async () => {
   await withTestServer(async baseUrl => {
     const response = await fetch(`${baseUrl}/health`);
@@ -86,6 +103,7 @@ test('GET /health responde estado local sem chamar Ollama', async () => {
     assert.equal(body.service, 'teste-local-code-llm-backend');
     assert.equal(typeof body.model, 'string');
     assert.equal(typeof body.queue.activeGenerations, 'number');
+    assert.equal(typeof body.cache.entries, 'number');
   });
 });
 
@@ -98,6 +116,7 @@ test('GET /api/status responde métricas da fila sem chamar Ollama', async () =>
     assert.equal(body.service, 'teste-local-code-llm-backend');
     assert.equal(typeof body.queue.queuedGenerations, 'number');
     assert.equal(typeof body.queue.completedGenerations, 'number');
+    assert.equal(typeof body.cache.hits, 'number');
   });
 });
 

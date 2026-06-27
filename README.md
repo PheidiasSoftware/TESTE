@@ -47,15 +47,25 @@ http://127.0.0.1:3131
 | `MODEL` | `qwen2.5-coder:1.5b-instruct` | Modelo usado na geração |
 | `MAX_BODY_BYTES` | `65536` | Limite do corpo JSON |
 | `REQUEST_TIMEOUT_MS` | `120000` | Timeout da chamada ao modelo |
+| `MAX_QUEUE_SIZE` | `4` | Quantidade máxima de pedidos aguardando geração |
+| `GENERATION_CONCURRENCY` | `1` | Gerações simultâneas; manter `1` em PC fraco sem GPU |
 
 ## Endpoints
 
 ### `GET /health`
 
-Retorna estado básico do backend.
+Retorna estado básico do backend e situação da fila.
 
 ```bash
 curl http://127.0.0.1:3131/health
+```
+
+### `GET /api/status`
+
+Retorna métricas simples de uso da fila, incluindo gerações ativas, pendentes, concluídas e falhas.
+
+```bash
+curl http://127.0.0.1:3131/api/status
 ```
 
 ### `POST /api/generate`
@@ -74,19 +84,30 @@ Campos aceitos:
 - `language` opcional: foco técnico, por exemplo `Node.js`, `Dart`, `Flutter`, `MySQL`.
 - `context` opcional: trecho controlado do projeto.
 
+## Proteção para PC fraco
+
+O backend usa uma fila simples de geração para evitar sobrecarregar CPU e RAM. Por padrão, apenas uma geração roda por vez (`GENERATION_CONCURRENCY=1`) e até quatro ficam aguardando (`MAX_QUEUE_SIZE=4`). Quando a fila enche, a API responde `429` em vez de deixar o computador travar.
+
+Para máquina com 8 GB RAM e sem GPU, recomenda-se manter:
+
+```text
+GENERATION_CONCURRENCY=1
+MAX_QUEUE_SIZE=4
+```
+
 ## Decisões de arquitetura
 
 - Sem framework no MVP para reduzir dependências e consumo de memória.
 - API local vinculada por padrão a `127.0.0.1`.
 - Limite de payload para evitar uso excessivo de memória.
 - Timeout para evitar travamento em PC fraco.
+- Fila de concorrência baixa para evitar múltiplas inferências simultâneas.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
 
 ## Próximos passos
 
 - Adicionar testes com `node --test`.
 - Adicionar streaming em endpoint separado.
-- Criar fila simples para evitar múltiplas gerações concorrentes em CPU fraca.
 - Criar cache opcional por hash de prompt.
 - Adicionar leitura segura de arquivos com allowlist e limite de tamanho.
 - Adicionar scripts Windows para iniciar Ollama e backend.

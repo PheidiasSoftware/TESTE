@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HOST = process.env.HOST || '127.0.0.1';
@@ -13,6 +13,84 @@ const GENERATION_CONCURRENCY = Math.max(
   1,
   Number.parseInt(process.env.GENERATION_CONCURRENCY || '1', 10)
 );
+const ENABLE_PROMPT_CACHE = process.env.ENABLE_PROMPT_CACHE !== 'false';
+const MAX_CACHE_ENTRIES = Math.max(0, Number.parseInt(process.env.MAX_CACHE_ENTRIES || '20', 10));
+
+export function createPromptCache({ enabled = true, maxEntries = 20 } = {}) {
+  const entries = new Map();
+  const metrics = {
+    hits: 0,
+    misses: 0,
+    writes: 0,
+    evictions: 0
+  };
+
+  function hashPrompt(prompt) {
+    return createHash('sha256').update(prompt).digest('hex');
+  }
+
+  function get(prompt) {
+    if (!enabled || maxEntries <= 0) {
+      metrics.misses += 1;
+      return null;
+    }
+
+    const key = hashPrompt(prompt);
+    if (!entries.has(key)) {
+      metrics.misses += 1;
+      return null;
+    }
+
+    const value = entries.get(key);
+    entries.delete(key);
+    entries.set(key, value);
+    metrics.hits += 1;
+    return {
+      key,
+      value
+    };
+  }
+
+  function set(prompt, value) {
+    if (!enabled || maxEntries <= 0) {
+      return null;
+    }
+
+    const key = hashPrompt(prompt);
+    if (entries.has(key)) {
+      entries.delete(key);
+    }
+
+    entries.set(key, value);
+    metrics.writes += 1;
+
+    while (entries.size > maxEntries) {
+      const oldestKey = entries.keys().next().value;
+      entries.delete(oldestKey);
+      metrics.evictions += 1;
+    }
+
+    return key;
+  }
+
+  function getStatus() {
+    return {
+      enabled,
+      maxEntries,
+      entries: entries.size,
+      hits: metrics.hits,
+      misses: metrics.misses,
+      writes: metrics.writes,
+      evictions: metrics.evictions
+    };
+  }
+
+  return {
+    get,
+    set,
+    getStatus
+  };
+}
 
 export function createGenerationQueue({ maxQueueSize = 4, generationConcurrency = 1 } = {}) {
   const queue = [];
@@ -78,6 +156,11 @@ const generationQueue = createGenerationQueue({
   generationConcurrency: GENERATION_CONCURRENCY
 });
 
+const promptCache = createPromptCache({
+  enabled: ENABLE_PROMPT_CACHE,
+  maxEntries: MAX_CACHE_ENTRIES
+});
+
 function sendJson(response, statusCode, payload) {
   const body = JSON.stringify(payload, null, 2);
   response.writeHead(statusCode, {
@@ -121,6 +204,10 @@ function readJsonBody(request) {
 
 function getQueueStatus() {
   return generationQueue.getStatus();
+}
+
+function getCacheStatus() {
+  return promptCache.getStatus();
 }
 
 export function buildCodingPrompt({ task, language = 'general', context = '' }) {
@@ -176,27 +263,51 @@ async function handleGenerate(request, response) {
     return;
   }
 
+  const prompt = buildCodingPrompt({
+    task: body.task.slice(0, 8000),
+    language: typeof body.language === 'string' ? body.language.slice(0, 80) : 'general',
+    context: typeof body.context === 'string' ? body.context.slice(0, 12000) : ''
+  });
+
+  const cached = promptCache.get(prompt);
+  if (cached) {
+    sendJson(response, 200, {
+      requestId,
+      model: MODEL,
+      durationMs: Date.now() - startedAt,
+      queueWaitMs: 0,
+      cached: true,
+      cacheKey: cached.key,
+      response: cached.value.response || '',
+      done: Boolean(cached.value.done),
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
+    return;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const prompt = buildCodingPrompt({
-      task: body.task.slice(0, 8000),
-      language: typeof body.language === 'string' ? body.language.slice(0, 80) : 'general',
-      context: typeof body.context === 'string' ? body.context.slice(0, 12000) : ''
-    });
-
     const queuedAt = Date.now();
     const result = await generationQueue.run(() => callOllamaGenerate(prompt, controller.signal));
+    const cacheKey = promptCache.set(prompt, {
+      response: result.response || '',
+      done: Boolean(result.done)
+    });
 
     sendJson(response, 200, {
       requestId,
       model: MODEL,
       durationMs: Date.now() - startedAt,
       queueWaitMs: Date.now() - queuedAt - (result.total_duration ? Math.round(result.total_duration / 1_000_000) : 0),
+      cached: false,
+      cacheKey,
       response: result.response || '',
       done: Boolean(result.done),
-      queue: getQueueStatus()
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
     });
   } catch (error) {
     const aborted = error?.name === 'AbortError';
@@ -204,7 +315,8 @@ async function handleGenerate(request, response) {
       error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
       detail: error.detail,
       requestId,
-      queue: getQueueStatus()
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
     });
   } finally {
     clearTimeout(timeout);
@@ -221,7 +333,8 @@ export const server = createServer(async (request, response) => {
         service: 'teste-local-code-llm-backend',
         model: MODEL,
         ollamaUrl: OLLAMA_URL,
-        queue: getQueueStatus()
+        queue: getQueueStatus(),
+        cache: getCacheStatus()
       });
       return;
     }
@@ -231,7 +344,8 @@ export const server = createServer(async (request, response) => {
         service: 'teste-local-code-llm-backend',
         model: MODEL,
         ollamaUrl: OLLAMA_URL,
-        queue: getQueueStatus()
+        queue: getQueueStatus(),
+        cache: getCacheStatus()
       });
       return;
     }
@@ -257,6 +371,7 @@ function startServer() {
     console.log(`Backend local ouvindo em http://${HOST}:${PORT}`);
     console.log(`Modelo configurado: ${MODEL}`);
     console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
+    console.log(`Cache: ${ENABLE_PROMPT_CACHE ? 'ativo' : 'desativado'}, limite=${MAX_CACHE_ENTRIES}`);
   });
 }
 

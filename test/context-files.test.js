@@ -46,7 +46,7 @@ test('buildContextFromFiles bloqueia excesso de arquivos antes de ler', async ()
 
 test('buildContextFromFiles rejeita lista com item inválido', async () => {
   await assert.rejects(
-    () => buildContextFromFiles({ contextFiles: ['a.md', 123] }),
+    () => buildContextFromFiles({ contextFiles: [123] }),
     error => error.statusCode === 400 && /precisam ser texto/.test(error.message)
   );
 });

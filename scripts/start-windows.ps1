@@ -23,6 +23,9 @@ if (-not $env:GENERATION_CONCURRENCY) { $env:GENERATION_CONCURRENCY = "1" }
 if (-not $env:MAX_QUEUE_SIZE) { $env:MAX_QUEUE_SIZE = "4" }
 if (-not $env:ENABLE_PROMPT_CACHE) { $env:ENABLE_PROMPT_CACHE = "true" }
 if (-not $env:MAX_CACHE_ENTRIES) { $env:MAX_CACHE_ENTRIES = "20" }
+if (-not $env:MAX_CONTEXT_FILES) { $env:MAX_CONTEXT_FILES = "4" }
+if (-not $env:MAX_CONTEXT_BYTES) { $env:MAX_CONTEXT_BYTES = "12000" }
+if (-not $env:MAX_FILE_READ_BYTES) { $env:MAX_FILE_READ_BYTES = "32768" }
 
 Write-Host "TESTE Local Code LLM Backend" -ForegroundColor Cyan
 Write-Host "Host: $HostName"
@@ -32,6 +35,8 @@ Write-Host "Model: $Model"
 Write-Host "Generation concurrency: $env:GENERATION_CONCURRENCY"
 Write-Host "Max queue size: $env:MAX_QUEUE_SIZE"
 Write-Host "Prompt cache: $env:ENABLE_PROMPT_CACHE / max entries $env:MAX_CACHE_ENTRIES"
+Write-Host "Context files: max $env:MAX_CONTEXT_FILES / max bytes $env:MAX_CONTEXT_BYTES"
+Write-Host "Max file read bytes: $env:MAX_FILE_READ_BYTES"
 Write-Host ""
 
 try {

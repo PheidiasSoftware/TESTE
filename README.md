@@ -81,6 +81,7 @@ Os testes atuais validam:
 - leitura segura de arquivos com bloqueio de travessia, pastas sensíveis, `.env` real e arquivos grandes;
 - montagem de contexto para geração a partir de lista controlada de arquivos textuais;
 - logs estruturados com redaction de campos sensíveis;
+- helpers HTTP para JSON, SSE e limite de payload;
 - rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida, `POST /api/generate-stream` com entrada inválida, `POST /api/read-file` com caminho inválido e rota 404.
 
 Esses testes não chamam o Ollama nem exigem modelo instalado, então podem rodar em máquina fraca apenas com Node.js 20+.
@@ -99,6 +100,7 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 
 ## Guias técnicos
 
+- [Arquitetura do backend](docs/architecture.md)
 - [Streaming SSE](docs/streaming.md)
 - [Rate limit local](docs/rate-limit.md)
 - [Seleção de modelos leves](docs/model-selection.md)
@@ -218,77 +220,3 @@ Proteções aplicadas:
 - bloqueia arquivos `.env` e `.env.*`;
 - aceita apenas extensões textuais permitidas;
 - bloqueia arquivos acima de `MAX_FILE_READ_BYTES`.
-
-Essa rota deve ser usada para montar contexto controlado para `/api/generate`, não para executar arquivos.
-
-## Logs estruturados
-
-O backend emite logs em JSON Lines para eventos importantes como início do servidor, requisições de geração, cache hit, falhas e leitura segura de arquivos.
-
-Exemplo de linha de log:
-
-```json
-{"timestamp":"2026-06-28T00:00:00.000Z","level":"info","service":"teste-local-code-llm-backend","event":"generate.request.completed","requestId":"...","durationMs":1200}
-```
-
-Proteções de log:
-
-- não registra prompt completo, contexto, conteúdo de arquivo nem resposta gerada;
-- redige campos com nomes sensíveis como `authorization`, `token`, `secret`, `password`, `apiKey`, `prompt`, `context`, `content` e `response`;
-- limita strings longas para reduzir ruído e memória;
-- pode ser desligado com `LOG_LEVEL=silent`.
-
-Níveis aceitos:
-
-```text
-silent,error,warn,info,debug
-```
-
-## Proteção para PC fraco
-
-O backend usa uma fila simples de geração para evitar sobrecarregar CPU e RAM. Por padrão, apenas uma geração roda por vez (`GENERATION_CONCURRENCY=1`) e até quatro ficam aguardando (`MAX_QUEUE_SIZE=4`). Quando a fila enche, a API responde `429` em vez de deixar o computador travar.
-
-Também existe cache em memória por hash de prompt. Em perguntas repetidas, o backend pode responder sem chamar o Ollama novamente, economizando CPU. O cache é pequeno por padrão (`MAX_CACHE_ENTRIES=20`) e é perdido ao reiniciar o backend, o que mantém o MVP simples e reversível.
-
-Para máquina com 8 GB RAM e sem GPU, recomenda-se manter:
-
-```text
-GENERATION_CONCURRENCY=1
-MAX_QUEUE_SIZE=4
-ENABLE_PROMPT_CACHE=true
-MAX_CACHE_ENTRIES=20
-MAX_FILE_READ_BYTES=32768
-MAX_CONTEXT_FILES=4
-MAX_CONTEXT_BYTES=12000
-LOG_LEVEL=info
-ENABLE_RATE_LIMIT=true
-RATE_LIMIT_MAX_REQUESTS=30
-```
-
-Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_FILE_READ_BYTES`, reduza `MAX_CONTEXT_FILES`, reduza `MAX_CONTEXT_BYTES`, use `LOG_LEVEL=warn` ou desative cache com `ENABLE_PROMPT_CACHE=false`.
-
-## Decisões de arquitetura
-
-- Sem framework no MVP para reduzir dependências e consumo de memória.
-- API local vinculada por padrão a `127.0.0.1`.
-- Limite de payload para evitar uso excessivo de memória.
-- Timeout para evitar travamento em PC fraco.
-- Fila de concorrência baixa para evitar múltiplas inferências simultâneas.
-- Cache em memória pequeno para economizar CPU em prompts repetidos.
-- Leitura segura limitada a arquivos textuais pequenos dentro do projeto.
-- Contexto por arquivos integrado ao `/api/generate` com limite de quantidade e bytes.
-- Streaming em rota separada via SSE para melhorar experiência sem alterar o endpoint JSON.
-- Rate limit em memória nas rotas pesadas para reduzir abuso acidental e travamentos.
-- Logs estruturados em JSON Lines com redaction de campos sensíveis e sem persistência em arquivo.
-- Script Windows em PowerShell para iniciar com padrões conservadores e verificar Ollama.
-- CI leve com GitHub Actions roda apenas `npm test` em Node.js 20, sem instalar Ollama.
-- Funções de prompt, cache, fila, leitura de arquivo, montagem de contexto, logging e servidor exportadas para testes sem iniciar o processo via `npm start`.
-- Rotas HTTP básicas testadas sem depender do Ollama.
-- Prompt técnico focado em respostas curtas, seguras e úteis para código.
-
-## Próximos passos
-
-- Testar `npm run start:windows` em Windows real com Ollama instalado.
-- Testar `POST /api/generate-stream` com Ollama real e modelo `qwen2.5-coder:1.5b-instruct`.
-- Validar integração inicial com uma extensão VS Code ou cliente Flutter usando [`docs/client-integration.md`](docs/client-integration.md).
-- Considerar separação gradual de `src/server.js` em módulos menores quando o arquivo crescer mais.

@@ -80,6 +80,7 @@ Os testes atuais validam:
 - cache simples por hash de prompt, incluindo reaproveitamento e limite de entradas;
 - leitura segura de arquivos com bloqueio de travessia, pastas sensíveis, `.env` real e arquivos grandes;
 - montagem de contexto para geração a partir de lista controlada de arquivos textuais;
+- logs estruturados com redaction de campos sensíveis;
 - rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida, `POST /api/generate-stream` com entrada inválida, `POST /api/read-file` com caminho inválido e rota 404.
 
 Esses testes não chamam o Ollama nem exigem modelo instalado, então podem rodar em máquina fraca apenas com Node.js 20+.
@@ -115,6 +116,7 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 | `MAX_CONTEXT_FILES` | `4` | Quantidade máxima de arquivos que `/api/generate` aceita em `contextFiles` |
 | `MAX_CONTEXT_BYTES` | `12000` | Tamanho máximo do contexto final montado para o prompt |
 | `ALLOWED_FILE_EXTENSIONS` | lista segura | Extensões permitidas separadas por vírgula |
+| `LOG_LEVEL` | `info` | Nível dos logs estruturados: `silent`, `error`, `warn`, `info` ou `debug` |
 
 Extensões permitidas por padrão:
 
@@ -126,7 +128,7 @@ Extensões permitidas por padrão:
 
 ### `GET /health`
 
-Retorna estado básico do backend, situação da fila, métricas do cache e configuração de leitura segura.
+Retorna estado básico do backend, situação da fila, métricas do cache, configuração de leitura segura e configuração de logs.
 
 ```bash
 curl http://127.0.0.1:3131/health
@@ -134,7 +136,7 @@ curl http://127.0.0.1:3131/health
 
 ### `GET /api/status`
 
-Retorna métricas simples de uso da fila, do cache e da leitura segura, incluindo gerações ativas, pendentes, concluídas, falhas, acertos e descartes de cache.
+Retorna métricas simples de uso da fila, do cache, da leitura segura e do logging, incluindo gerações ativas, pendentes, concluídas, falhas, acertos e descartes de cache.
 
 ```bash
 curl http://127.0.0.1:3131/api/status
@@ -207,6 +209,29 @@ Proteções aplicadas:
 
 Essa rota deve ser usada para montar contexto controlado para `/api/generate`, não para executar arquivos.
 
+## Logs estruturados
+
+O backend emite logs em JSON Lines para eventos importantes como início do servidor, requisições de geração, cache hit, falhas e leitura segura de arquivos.
+
+Exemplo de linha de log:
+
+```json
+{"timestamp":"2026-06-28T00:00:00.000Z","level":"info","service":"teste-local-code-llm-backend","event":"generate.request.completed","requestId":"...","durationMs":1200}
+```
+
+Proteções de log:
+
+- não registra prompt completo, contexto, conteúdo de arquivo nem resposta gerada;
+- redige campos com nomes sensíveis como `authorization`, `token`, `secret`, `password`, `apiKey`, `prompt`, `context`, `content` e `response`;
+- limita strings longas para reduzir ruído e memória;
+- pode ser desligado com `LOG_LEVEL=silent`.
+
+Níveis aceitos:
+
+```text
+silent,error,warn,info,debug
+```
+
 ## Proteção para PC fraco
 
 O backend usa uma fila simples de geração para evitar sobrecarregar CPU e RAM. Por padrão, apenas uma geração roda por vez (`GENERATION_CONCURRENCY=1`) e até quatro ficam aguardando (`MAX_QUEUE_SIZE=4`). Quando a fila enche, a API responde `429` em vez de deixar o computador travar.
@@ -223,9 +248,10 @@ MAX_CACHE_ENTRIES=20
 MAX_FILE_READ_BYTES=32768
 MAX_CONTEXT_FILES=4
 MAX_CONTEXT_BYTES=12000
+LOG_LEVEL=info
 ```
 
-Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_FILE_READ_BYTES`, reduza `MAX_CONTEXT_FILES`, reduza `MAX_CONTEXT_BYTES` ou desative cache com `ENABLE_PROMPT_CACHE=false`.
+Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_FILE_READ_BYTES`, reduza `MAX_CONTEXT_FILES`, reduza `MAX_CONTEXT_BYTES`, use `LOG_LEVEL=warn` ou desative cache com `ENABLE_PROMPT_CACHE=false`.
 
 ## Decisões de arquitetura
 
@@ -238,9 +264,10 @@ Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_
 - Leitura segura limitada a arquivos textuais pequenos dentro do projeto.
 - Contexto por arquivos integrado ao `/api/generate` com limite de quantidade e bytes.
 - Streaming em rota separada via SSE para melhorar experiência sem alterar o endpoint JSON.
+- Logs estruturados em JSON Lines com redaction de campos sensíveis e sem persistência em arquivo.
 - Script Windows em PowerShell para iniciar com padrões conservadores e verificar Ollama.
 - CI leve com GitHub Actions roda apenas `npm test` em Node.js 20, sem instalar Ollama.
-- Funções de prompt, cache, fila, leitura de arquivo, montagem de contexto e servidor exportadas para testes sem iniciar o processo via `npm start`.
+- Funções de prompt, cache, fila, leitura de arquivo, montagem de contexto, logging e servidor exportadas para testes sem iniciar o processo via `npm start`.
 - Rotas HTTP básicas testadas sem depender do Ollama.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
 

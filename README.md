@@ -101,6 +101,8 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 ## Guias técnicos
 
 - [Arquitetura do backend](docs/architecture.md)
+- [Contrato da API local](docs/api-contract.md)
+- [Status do MVP backend](docs/backend-mvp-status.md)
 - [Streaming SSE](docs/streaming.md)
 - [Rate limit local](docs/rate-limit.md)
 - [Seleção de modelos leves](docs/model-selection.md)

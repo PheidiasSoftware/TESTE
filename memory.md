@@ -127,3 +127,78 @@ Implementar uma melhoria pequena e segura no backend: fila simples de geração 
 ### Próximos passos sugeridos
 
 Na próxima execução segura, priorizar refatoração mínima para tornar funções testáveis e adicionar testes básicos com `node --test`, sem dependências externas.
+
+## 2026-06-27 22:37 - Leitura segura de arquivos do projeto
+
+### Avaliação inicial desta execução
+
+- Repositório analisado antes de qualquer alteração.
+- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `scripts/start-windows.ps1`, `memory.md` e `PROJECT_MEMORY.md`.
+- `README.md` documentava backend local com Ollama, fila, cache, testes, script Windows, endpoints existentes e indicava leitura segura de arquivos como próximo passo.
+- `package.json` continuava sem dependências externas, com Node.js 20+ e scripts `start`, `start:windows`, `dev` e `test`.
+- `src/server.js` possuía HTTP nativo, geração via Ollama, fila, cache, timeout, limite de payload e rotas `/health`, `/api/status`, `/api/generate`.
+- `test/server.test.js` cobria prompt, fila, cache e rotas HTTP locais sem chamar Ollama.
+- `scripts/start-windows.ps1` continha inicialização conservadora para Windows, sem instalar pacotes nem baixar modelos automaticamente.
+- `PROJECT_MEMORY.md` indicava como próximo passo seguro criar leitura segura de arquivos com allowlist e limite de tamanho.
+- Não foram encontrados registros claros de Claude Agent, instruções conflitantes, branches, issues ou PRs relevantes nos arquivos analisados ou na busca textual disponível.
+
+### Decisão tomada
+
+Implementar leitura segura e limitada de arquivos textuais do próprio projeto, para permitir que a API monte contexto de programação sem executar código, sem acessar caminhos fora da raiz e sem expor arquivos sensíveis como `.env`.
+
+### Arquivos alterados
+
+- `src/server.js`
+  - Adicionados módulos nativos `node:fs/promises` e `node:path`.
+  - Adicionadas variáveis `PROJECT_ROOT`, `MAX_FILE_READ_BYTES` e `ALLOWED_FILE_EXTENSIONS`.
+  - Criada função `validateSafeProjectFilePath()` para bloquear caminho absoluto, travessia, `.git`, `node_modules`, artefatos gerados e `.env` real.
+  - Criada função `readProjectFile()` para ler apenas arquivo textual pequeno dentro da raiz permitida.
+  - Criado endpoint `POST /api/read-file`.
+  - `GET /health` e `GET /api/status` passaram a retornar configuração de leitura segura.
+  - Lista de rotas `404` atualizada.
+
+- `test/server.test.js`
+  - Adicionados testes para validação de caminho seguro.
+  - Adicionados testes para bloqueio de travessia, `node_modules` e `.env`.
+  - Adicionado teste para leitura de arquivo pequeno em diretório temporário.
+  - Adicionado teste para bloqueio por tamanho máximo.
+  - Adicionado teste HTTP para `POST /api/read-file` com caminho inválido.
+  - Ajustado teste de caminho para funcionar em Windows e Linux.
+
+- `README.md`
+  - Documentadas variáveis de leitura segura.
+  - Documentado endpoint `POST /api/read-file`.
+  - Documentadas proteções aplicadas e uso recomendado apenas para contexto, sem execução de código.
+  - Atualizadas decisões de arquitetura e próximos passos.
+
+- `memory.md`
+  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos, pendências e próximo passo.
+
+### Validações executadas
+
+- Validação estática manual do fluxo de leitura segura.
+- Conferido que a implementação usa apenas módulos nativos do Node.js e não adiciona dependências externas.
+- Conferido que a rota nova não executa arquivos, apenas lê texto limitado.
+- Conferido que caminhos absolutos, travessia, `node_modules`, `.git`, artefatos gerados e `.env` são bloqueados.
+- Conferido que os testes não chamam o Ollama.
+- Não foi possível executar `npm test` pelo conector GitHub; validação final deve ser feita localmente ou por CI futuro.
+
+### Riscos e observações
+
+- A leitura segura ainda retorna o conteúdo inteiro do arquivo permitido até o limite configurado. Para arquivos maiores, a API bloqueia em vez de truncar.
+- `PROJECT_ROOT` usa a pasta atual por padrão; o backend deve ser iniciado a partir da raiz do repositório ou com `PROJECT_ROOT` definido explicitamente.
+- A allowlist de extensões deve permanecer restrita para evitar leitura acidental de binários ou arquivos sensíveis.
+- Ainda não há CI automático para rodar `npm test` após cada commit.
+
+### Pendências atualizadas
+
+1. Executar `npm test` localmente em Windows/Node.js 20+.
+2. Testar `npm run start:windows` em Windows real com Ollama instalado.
+3. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
+4. Integrar leitura segura de arquivo ao fluxo de geração com contexto controlado por lista de arquivos.
+5. Documentar integração futura com plugin/extensão VS Code.
+6. Considerar CI leve com GitHub Actions usando Node.js 20.
+
+### Próximo passo sugerido
+
+Na próxima execução segura, priorizar a integração controlada de arquivos lidos ao `/api/generate` ou criar endpoint de streaming separado, mantendo o backend leve e sem execução automática de código do usuário.

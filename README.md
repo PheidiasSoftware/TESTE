@@ -78,7 +78,8 @@ Os testes atuais validam:
 - montagem do prompt técnico sem chamar Ollama;
 - fila de geração, limite de fila cheia e concorrência conservadora;
 - cache simples por hash de prompt, incluindo reaproveitamento e limite de entradas;
-- rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida e rota 404.
+- leitura segura de arquivos com bloqueio de travessia, pastas sensíveis, `.env` real e arquivos grandes;
+- rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida, `POST /api/read-file` com caminho inválido e rota 404.
 
 Esses testes não chamam o Ollama nem exigem modelo instalado, então podem rodar em máquina fraca apenas com Node.js 20+.
 
@@ -96,12 +97,21 @@ Esses testes não chamam o Ollama nem exigem modelo instalado, então podem roda
 | `GENERATION_CONCURRENCY` | `1` | Gerações simultâneas; manter `1` em PC fraco sem GPU |
 | `ENABLE_PROMPT_CACHE` | `true` | Ativa cache em memória para prompts repetidos |
 | `MAX_CACHE_ENTRIES` | `20` | Quantidade máxima de respostas em cache |
+| `PROJECT_ROOT` | pasta atual | Raiz permitida para leitura segura de arquivos |
+| `MAX_FILE_READ_BYTES` | `32768` | Tamanho máximo de arquivo lido pela API |
+| `ALLOWED_FILE_EXTENSIONS` | lista segura | Extensões permitidas separadas por vírgula |
+
+Extensões permitidas por padrão:
+
+```text
+.css,.dart,.html,.js,.json,.md,.ps1,.sql,.ts,.txt,.yaml,.yml
+```
 
 ## Endpoints
 
 ### `GET /health`
 
-Retorna estado básico do backend, situação da fila e métricas do cache.
+Retorna estado básico do backend, situação da fila, métricas do cache e configuração de leitura segura.
 
 ```bash
 curl http://127.0.0.1:3131/health
@@ -109,7 +119,7 @@ curl http://127.0.0.1:3131/health
 
 ### `GET /api/status`
 
-Retorna métricas simples de uso da fila e do cache, incluindo gerações ativas, pendentes, concluídas, falhas, acertos e descartes de cache.
+Retorna métricas simples de uso da fila, do cache e da leitura segura, incluindo gerações ativas, pendentes, concluídas, falhas, acertos e descartes de cache.
 
 ```bash
 curl http://127.0.0.1:3131/api/status
@@ -133,6 +143,27 @@ Campos aceitos:
 
 A resposta informa `cached: true` quando a resposta veio do cache local em memória.
 
+### `POST /api/read-file`
+
+Lê um arquivo textual pequeno dentro da pasta do projeto para alimentar contexto de programação, sem executar código.
+
+```bash
+curl -X POST http://127.0.0.1:3131/api/read-file ^
+  -H "Content-Type: application/json" ^
+  -d "{\"path\":\"src/server.js\"}"
+```
+
+Proteções aplicadas:
+
+- aceita apenas caminho relativo ao projeto;
+- bloqueia travessia como `../arquivo`;
+- bloqueia `.git`, `node_modules`, `dist`, `build`, `.next` e `.cache`;
+- bloqueia arquivos `.env` e `.env.*`;
+- aceita apenas extensões textuais permitidas;
+- bloqueia arquivos acima de `MAX_FILE_READ_BYTES`.
+
+Essa rota deve ser usada para montar contexto controlado para `/api/generate`, não para executar arquivos.
+
 ## Proteção para PC fraco
 
 O backend usa uma fila simples de geração para evitar sobrecarregar CPU e RAM. Por padrão, apenas uma geração roda por vez (`GENERATION_CONCURRENCY=1`) e até quatro ficam aguardando (`MAX_QUEUE_SIZE=4`). Quando a fila enche, a API responde `429` em vez de deixar o computador travar.
@@ -146,9 +177,10 @@ GENERATION_CONCURRENCY=1
 MAX_QUEUE_SIZE=4
 ENABLE_PROMPT_CACHE=true
 MAX_CACHE_ENTRIES=20
+MAX_FILE_READ_BYTES=32768
 ```
 
-Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES` ou desative com `ENABLE_PROMPT_CACHE=false`.
+Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_FILE_READ_BYTES` ou desative cache com `ENABLE_PROMPT_CACHE=false`.
 
 ## Decisões de arquitetura
 
@@ -158,14 +190,15 @@ Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES` ou desative c
 - Timeout para evitar travamento em PC fraco.
 - Fila de concorrência baixa para evitar múltiplas inferências simultâneas.
 - Cache em memória pequeno para economizar CPU em prompts repetidos.
+- Leitura segura limitada a arquivos textuais pequenos dentro do projeto.
 - Script Windows em PowerShell para iniciar com padrões conservadores e verificar Ollama.
-- Funções de prompt, cache, fila e servidor exportadas para testes sem iniciar o processo via `npm start`.
+- Funções de prompt, cache, fila, leitura de arquivo e servidor exportadas para testes sem iniciar o processo via `npm start`.
 - Rotas HTTP básicas testadas sem depender do Ollama.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
 
 ## Próximos passos
 
 - Adicionar endpoint de streaming em rota separada.
-- Adicionar leitura segura de arquivos com allowlist e limite de tamanho.
+- Integrar leitura segura de arquivo ao fluxo de geração com contexto controlado por lista de arquivos.
 - Documentar integração futura com plugin/extensão VS Code.
 - Considerar CI leve com GitHub Actions usando Node.js 20.

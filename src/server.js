@@ -10,6 +10,7 @@ import {
   LOG_LEVEL_PRIORITY,
   SENSITIVE_LOG_KEY_PATTERN
 } from './config.js';
+import { createGenerationQueue } from './generation-queue.js';
 import {
   openEventStream,
   readJsonBody as readJsonBodyFromRequest,
@@ -20,6 +21,7 @@ import { createOllamaClient } from './ollama.js';
 import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-limit.js';
 
 export { createPromptCache } from './cache.js';
+export { createGenerationQueue } from './generation-queue.js';
 
 const {
   HOST,
@@ -73,41 +75,6 @@ export function createStructuredLogger({ level = 'info', sink = console.log } = 
 }
 
 const logger = createStructuredLogger({ level: LOG_LEVEL });
-
-export function createGenerationQueue({ maxQueueSize = 4, generationConcurrency = 1 } = {}) {
-  const queue = [];
-  const metrics = { activeGenerations: 0, completedGenerations: 0, failedGenerations: 0 };
-  function getStatus() {
-    return { activeGenerations: metrics.activeGenerations, queuedGenerations: queue.length, maxQueueSize, generationConcurrency, completedGenerations: metrics.completedGenerations, failedGenerations: metrics.failedGenerations };
-  }
-  function drain() {
-    while (metrics.activeGenerations < generationConcurrency && queue.length > 0) {
-      const item = queue.shift();
-      metrics.activeGenerations += 1;
-      Promise.resolve().then(item.job).then(result => {
-        metrics.completedGenerations += 1;
-        item.resolve(result);
-      }).catch(error => {
-        metrics.failedGenerations += 1;
-        item.reject(error);
-      }).finally(() => {
-        metrics.activeGenerations -= 1;
-        drain();
-      });
-    }
-  }
-  function run(job) {
-    return new Promise((resolvePromise, reject) => {
-      if (queue.length >= maxQueueSize) {
-        reject(Object.assign(new Error('Fila de geração cheia. Tente novamente em alguns instantes.'), { statusCode: 429 }));
-        return;
-      }
-      queue.push({ job, resolve: resolvePromise, reject });
-      drain();
-    });
-  }
-  return { run, getStatus };
-}
 
 const generationQueue = createGenerationQueue({ maxQueueSize: MAX_QUEUE_SIZE, generationConcurrency: GENERATION_CONCURRENCY });
 const promptCache = createPromptCache({ enabled: ENABLE_PROMPT_CACHE, maxEntries: MAX_CACHE_ENTRIES });

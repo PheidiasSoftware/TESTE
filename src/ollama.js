@@ -64,6 +64,117 @@ export function parseOllamaStreamLine(line) {
   }
 }
 
+export function createOllamaClient({
+  baseUrl,
+  model,
+  fetchImpl = globalThis.fetch,
+  defaultOptions = {}
+} = {}) {
+  if (!baseUrl || typeof baseUrl !== 'string') {
+    throw Object.assign(new Error('baseUrl do Ollama obrigatório.'), { statusCode: 500 });
+  }
+
+  if (!model || typeof model !== 'string') {
+    throw Object.assign(new Error('Modelo Ollama obrigatório.'), { statusCode: 500 });
+  }
+
+  if (typeof fetchImpl !== 'function') {
+    throw Object.assign(new Error('fetchImpl obrigatório para cliente Ollama.'), { statusCode: 500 });
+  }
+
+  const endpoint = `${baseUrl.replace(/\/+$/, '')}/api/generate`;
+
+  async function generate(prompt, { signal, options = {} } = {}) {
+    const response = await fetchImpl(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(buildOllamaGeneratePayload({
+        model,
+        prompt,
+        stream: false,
+        options: { ...defaultOptions, ...options }
+      })),
+      signal
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw Object.assign(new Error('Falha ao chamar Ollama.'), {
+        statusCode: 502,
+        detail: detail.slice(0, 500)
+      });
+    }
+
+    return response.json();
+  }
+
+  async function generateStream(prompt, { signal, options = {}, onToken } = {}) {
+    const response = await fetchImpl(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(buildOllamaGeneratePayload({
+        model,
+        prompt,
+        stream: true,
+        options: { ...defaultOptions, ...options }
+      })),
+      signal
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw Object.assign(new Error('Falha ao chamar Ollama em streaming.'), {
+        statusCode: 502,
+        detail: detail.slice(0, 500)
+      });
+    }
+
+    if (!response.body) {
+      throw Object.assign(new Error('Runtime local não retornou corpo de streaming.'), { statusCode: 502 });
+    }
+
+    return readOllamaStream(response.body, { onToken });
+  }
+
+  return { generate, generateStream };
+}
+
+export async function readOllamaStream(body, { onToken } = {}) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullResponse = '';
+
+  while (true) {
+    const chunk = await reader.read();
+    buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const parsed = parseOllamaStreamLine(line);
+      if (!parsed) continue;
+
+      if (parsed.response) {
+        fullResponse += parsed.response;
+        onToken?.(parsed.response, parsed.raw);
+      }
+
+      if (parsed.done) {
+        return {
+          response: fullResponse,
+          done: true,
+          total_duration: parsed.total_duration
+        };
+      }
+    }
+
+    if (chunk.done) break;
+  }
+
+  return { response: fullResponse, done: false };
+}
+
 function clampInteger(value, min, max) {
   return Math.min(max, Math.max(min, Math.trunc(value)));
 }

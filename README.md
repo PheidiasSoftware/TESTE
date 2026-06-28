@@ -37,6 +37,34 @@ Servidor padrão:
 http://127.0.0.1:3131
 ```
 
+## Como rodar no Windows
+
+Use o script PowerShell para iniciar o backend com padrões conservadores para PC fraco:
+
+```powershell
+npm run start:windows
+```
+
+Ou diretamente:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start-windows.ps1
+```
+
+O script:
+
+- mantém `GENERATION_CONCURRENCY=1` quando a variável não foi definida;
+- mantém `MAX_QUEUE_SIZE=4` quando a variável não foi definida;
+- mantém cache pequeno por padrão;
+- verifica se o Ollama responde em `OLLAMA_URL`;
+- apenas inicia o backend local, sem executar código gerado pelo modelo.
+
+Se o Ollama não responder, inicie o Ollama e instale o modelo sugerido:
+
+```powershell
+ollama pull qwen2.5-coder:1.5b-instruct
+```
+
 ## Testes
 
 O projeto usa o test runner nativo do Node.js, sem dependências externas:
@@ -130,6 +158,7 @@ Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES` ou desative c
 - Timeout para evitar travamento em PC fraco.
 - Fila de concorrência baixa para evitar múltiplas inferências simultâneas.
 - Cache em memória pequeno para economizar CPU em prompts repetidos.
+- Script Windows em PowerShell para iniciar com padrões conservadores e verificar Ollama.
 - Funções de prompt, cache, fila e servidor exportadas para testes sem iniciar o processo via `npm start`.
 - Rotas HTTP básicas testadas sem depender do Ollama.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
@@ -138,6 +167,5 @@ Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES` ou desative c
 
 - Adicionar endpoint de streaming em rota separada.
 - Adicionar leitura segura de arquivos com allowlist e limite de tamanho.
-- Adicionar scripts Windows para iniciar Ollama e backend.
 - Documentar integração futura com plugin/extensão VS Code.
 - Considerar CI leve com GitHub Actions usando Node.js 20.

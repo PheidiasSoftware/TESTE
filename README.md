@@ -80,9 +80,21 @@ Os testes atuais validam:
 - cache simples por hash de prompt, incluindo reaproveitamento e limite de entradas;
 - leitura segura de arquivos com bloqueio de travessia, pastas sensíveis, `.env` real e arquivos grandes;
 - montagem de contexto para geração a partir de lista controlada de arquivos textuais;
-- rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida, `POST /api/read-file` com caminho inválido e rota 404.
+- rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida, `POST /api/generate-stream` com entrada inválida, `POST /api/read-file` com caminho inválido e rota 404.
 
 Esses testes não chamam o Ollama nem exigem modelo instalado, então podem rodar em máquina fraca apenas com Node.js 20+.
+
+## CI leve
+
+O repositório possui GitHub Actions em `.github/workflows/node-test.yml` para rodar `npm test` automaticamente em Node.js 20.
+
+O workflow roda em:
+
+- push na branch `main`;
+- pull request para `main`;
+- execução manual por `workflow_dispatch`.
+
+A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com tarefa válida. Ela cobre somente os testes locais que não dependem de GPU nem de runtime externo.
 
 ## Variáveis de ambiente
 
@@ -161,6 +173,19 @@ A resposta informa:
 
 `contextFiles` reutiliza as mesmas proteções de `POST /api/read-file`: não aceita caminho absoluto, travessia, `.env`, `.git`, `node_modules`, artefatos gerados, extensões fora da allowlist ou arquivos grandes.
 
+### `POST /api/generate-stream`
+
+Gera resposta por streaming usando Server-Sent Events. É útil para respostas longas porque o cliente começa a receber tokens antes do término completo da geração.
+
+Guia técnico completo: [`docs/streaming.md`](docs/streaming.md).
+
+Eventos emitidos:
+
+- `metadata`: dados iniciais da requisição, cache, fila e contexto.
+- `token`: pedaços de texto gerados pelo modelo.
+- `done`: finalização bem-sucedida.
+- `error`: erro durante a geração em streaming.
+
 ### `POST /api/read-file`
 
 Lê um arquivo textual pequeno dentro da pasta do projeto para alimentar contexto de programação, sem executar código.
@@ -212,13 +237,16 @@ Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_
 - Cache em memória pequeno para economizar CPU em prompts repetidos.
 - Leitura segura limitada a arquivos textuais pequenos dentro do projeto.
 - Contexto por arquivos integrado ao `/api/generate` com limite de quantidade e bytes.
+- Streaming em rota separada via SSE para melhorar experiência sem alterar o endpoint JSON.
 - Script Windows em PowerShell para iniciar com padrões conservadores e verificar Ollama.
+- CI leve com GitHub Actions roda apenas `npm test` em Node.js 20, sem instalar Ollama.
 - Funções de prompt, cache, fila, leitura de arquivo, montagem de contexto e servidor exportadas para testes sem iniciar o processo via `npm start`.
 - Rotas HTTP básicas testadas sem depender do Ollama.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
 
 ## Próximos passos
 
-- Adicionar endpoint de streaming em rota separada.
-- Documentar integração futura com plugin/extensão VS Code.
-- Considerar CI leve com GitHub Actions usando Node.js 20.
+- Testar `npm run start:windows` em Windows real com Ollama instalado.
+- Testar `POST /api/generate-stream` com Ollama real e modelo `qwen2.5-coder:1.5b-instruct`.
+- Documentar integração futura com plugin/extensão VS Code ou cliente Flutter.
+- Considerar separação gradual de `src/server.js` em módulos menores quando o arquivo crescer mais.

@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
+import { readFile, stat } from 'node:fs/promises';
+import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HOST = process.env.HOST || '127.0.0.1';
@@ -15,6 +17,39 @@ const GENERATION_CONCURRENCY = Math.max(
 );
 const ENABLE_PROMPT_CACHE = process.env.ENABLE_PROMPT_CACHE !== 'false';
 const MAX_CACHE_ENTRIES = Math.max(0, Number.parseInt(process.env.MAX_CACHE_ENTRIES || '20', 10));
+const PROJECT_ROOT = resolve(process.env.PROJECT_ROOT || process.cwd());
+const MAX_FILE_READ_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_FILE_READ_BYTES || '32768', 10));
+const DEFAULT_ALLOWED_FILE_EXTENSIONS = [
+  '.css',
+  '.dart',
+  '.html',
+  '.js',
+  '.json',
+  '.md',
+  '.ps1',
+  '.sql',
+  '.ts',
+  '.txt',
+  '.yaml',
+  '.yml'
+];
+
+function getAllowedFileExtensions() {
+  const raw = process.env.ALLOWED_FILE_EXTENSIONS;
+  if (!raw) {
+    return DEFAULT_ALLOWED_FILE_EXTENSIONS;
+  }
+
+  const parsed = raw
+    .split(',')
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean)
+    .map(item => (item.startsWith('.') ? item : `.${item}`));
+
+  return parsed.length > 0 ? parsed : DEFAULT_ALLOWED_FILE_EXTENSIONS;
+}
+
+const ALLOWED_FILE_EXTENSIONS = getAllowedFileExtensions();
 
 export function createPromptCache({ enabled = true, maxEntries = 20 } = {}) {
   const entries = new Map();
@@ -210,6 +245,14 @@ function getCacheStatus() {
   return promptCache.getStatus();
 }
 
+function getFileReadStatus() {
+  return {
+    projectRoot: PROJECT_ROOT,
+    maxFileReadBytes: MAX_FILE_READ_BYTES,
+    allowedFileExtensions: ALLOWED_FILE_EXTENSIONS
+  };
+}
+
 export function buildCodingPrompt({ task, language = 'general', context = '' }) {
   return [
     'Você é uma SLM local focada em programação para PC fraco, sem GPU.',
@@ -220,6 +263,90 @@ export function buildCodingPrompt({ task, language = 'general', context = '' }) 
     context ? `Contexto do projeto:\n${context}` : 'Contexto do projeto: não fornecido.',
     `Tarefa:\n${task}`
   ].join('\n\n');
+}
+
+export function validateSafeProjectFilePath({
+  requestedPath,
+  projectRoot = PROJECT_ROOT,
+  allowedFileExtensions = ALLOWED_FILE_EXTENSIONS
+} = {}) {
+  if (!requestedPath || typeof requestedPath !== 'string') {
+    throw Object.assign(new Error('Campo obrigatório: path precisa ser texto.'), { statusCode: 400 });
+  }
+
+  if (requestedPath.includes('\0')) {
+    throw Object.assign(new Error('Caminho inválido.'), { statusCode: 400 });
+  }
+
+  if (isAbsolute(requestedPath)) {
+    throw Object.assign(new Error('Use caminho relativo ao projeto, não caminho absoluto.'), { statusCode: 400 });
+  }
+
+  const safeRoot = resolve(projectRoot);
+  const safePath = resolve(safeRoot, requestedPath);
+  const relativePath = relative(safeRoot, safePath);
+
+  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    throw Object.assign(new Error('Caminho fora da pasta do projeto não é permitido.'), { statusCode: 403 });
+  }
+
+  const normalizedSegments = relativePath.split(/[\\/]+/);
+  const blockedSegments = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.cache']);
+  if (normalizedSegments.some(segment => blockedSegments.has(segment))) {
+    throw Object.assign(new Error('Leitura bloqueada para pastas internas, dependências ou artefatos gerados.'), { statusCode: 403 });
+  }
+
+  const fileName = basename(relativePath).toLowerCase();
+  if (fileName === '.env' || fileName.startsWith('.env.')) {
+    throw Object.assign(new Error('Arquivos de ambiente reais não podem ser lidos pela API.'), { statusCode: 403 });
+  }
+
+  const extension = extname(relativePath).toLowerCase();
+  if (!allowedFileExtensions.includes(extension)) {
+    throw Object.assign(new Error(`Extensão não permitida: ${extension || 'sem extensão'}.`), { statusCode: 415 });
+  }
+
+  return {
+    absolutePath: safePath,
+    relativePath
+  };
+}
+
+export async function readProjectFile({
+  path,
+  projectRoot = PROJECT_ROOT,
+  maxBytes = MAX_FILE_READ_BYTES,
+  allowedFileExtensions = ALLOWED_FILE_EXTENSIONS
+} = {}) {
+  const safeFile = validateSafeProjectFilePath({
+    requestedPath: path,
+    projectRoot,
+    allowedFileExtensions
+  });
+
+  const fileStat = await stat(safeFile.absolutePath).catch(error => {
+    if (error?.code === 'ENOENT') {
+      throw Object.assign(new Error('Arquivo não encontrado.'), { statusCode: 404 });
+    }
+    throw error;
+  });
+
+  if (!fileStat.isFile()) {
+    throw Object.assign(new Error('O caminho informado não é um arquivo.'), { statusCode: 400 });
+  }
+
+  if (fileStat.size > maxBytes) {
+    throw Object.assign(new Error(`Arquivo excede o limite de leitura de ${maxBytes} bytes.`), { statusCode: 413 });
+  }
+
+  const content = await readFile(safeFile.absolutePath, 'utf8');
+
+  return {
+    path: safeFile.relativePath,
+    sizeBytes: fileStat.size,
+    maxFileReadBytes: maxBytes,
+    content
+  };
 }
 
 async function callOllamaGenerate(prompt, signal) {
@@ -323,6 +450,28 @@ async function handleGenerate(request, response) {
   }
 }
 
+async function handleReadFile(request, response) {
+  const requestId = randomUUID();
+  const body = await readJsonBody(request);
+
+  try {
+    const result = await readProjectFile({
+      path: typeof body.path === 'string' ? body.path.slice(0, 500) : body.path
+    });
+
+    sendJson(response, 200, {
+      requestId,
+      ...result
+    });
+  } catch (error) {
+    sendJson(response, error.statusCode || 500, {
+      error: error.message || 'Erro ao ler arquivo.',
+      requestId,
+      fileRead: getFileReadStatus()
+    });
+  }
+}
+
 export const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url || '/', `http://${request.headers.host || HOST}`);
@@ -334,7 +483,8 @@ export const server = createServer(async (request, response) => {
         model: MODEL,
         ollamaUrl: OLLAMA_URL,
         queue: getQueueStatus(),
-        cache: getCacheStatus()
+        cache: getCacheStatus(),
+        fileRead: getFileReadStatus()
       });
       return;
     }
@@ -345,7 +495,8 @@ export const server = createServer(async (request, response) => {
         model: MODEL,
         ollamaUrl: OLLAMA_URL,
         queue: getQueueStatus(),
-        cache: getCacheStatus()
+        cache: getCacheStatus(),
+        fileRead: getFileReadStatus()
       });
       return;
     }
@@ -355,9 +506,14 @@ export const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === 'POST' && url.pathname === '/api/read-file') {
+      await handleReadFile(request, response);
+      return;
+    }
+
     sendJson(response, 404, {
       error: 'Rota não encontrada.',
-      routes: ['GET /health', 'GET /api/status', 'POST /api/generate']
+      routes: ['GET /health', 'GET /api/status', 'POST /api/generate', 'POST /api/read-file']
     });
   } catch (error) {
     sendJson(response, error.statusCode || 500, {
@@ -372,6 +528,7 @@ function startServer() {
     console.log(`Modelo configurado: ${MODEL}`);
     console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
     console.log(`Cache: ${ENABLE_PROMPT_CACHE ? 'ativo' : 'desativado'}, limite=${MAX_CACHE_ENTRIES}`);
+    console.log(`Leitura de arquivos: raiz=${PROJECT_ROOT}, limite=${MAX_FILE_READ_BYTES} bytes`);
   });
 }
 

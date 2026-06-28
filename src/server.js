@@ -19,6 +19,8 @@ const ENABLE_PROMPT_CACHE = process.env.ENABLE_PROMPT_CACHE !== 'false';
 const MAX_CACHE_ENTRIES = Math.max(0, Number.parseInt(process.env.MAX_CACHE_ENTRIES || '20', 10));
 const PROJECT_ROOT = resolve(process.env.PROJECT_ROOT || process.cwd());
 const MAX_FILE_READ_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_FILE_READ_BYTES || '32768', 10));
+const MAX_CONTEXT_FILES = Math.max(0, Number.parseInt(process.env.MAX_CONTEXT_FILES || '4', 10));
+const MAX_CONTEXT_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_CONTEXT_BYTES || '12000', 10));
 const DEFAULT_ALLOWED_FILE_EXTENSIONS = [
   '.css',
   '.dart',
@@ -249,6 +251,8 @@ function getFileReadStatus() {
   return {
     projectRoot: PROJECT_ROOT,
     maxFileReadBytes: MAX_FILE_READ_BYTES,
+    maxContextFiles: MAX_CONTEXT_FILES,
+    maxContextBytes: MAX_CONTEXT_BYTES,
     allowedFileExtensions: ALLOWED_FILE_EXTENSIONS
   };
 }
@@ -349,6 +353,86 @@ export async function readProjectFile({
   };
 }
 
+export async function buildContextFromFiles({
+  context = '',
+  contextFiles = [],
+  projectRoot = PROJECT_ROOT,
+  maxFiles = MAX_CONTEXT_FILES,
+  maxContextBytes = MAX_CONTEXT_BYTES,
+  maxFileReadBytes = MAX_FILE_READ_BYTES,
+  allowedFileExtensions = ALLOWED_FILE_EXTENSIONS
+} = {}) {
+  if (contextFiles === undefined || contextFiles === null || contextFiles.length === 0) {
+    return {
+      context,
+      files: [],
+      totalBytes: Buffer.byteLength(context, 'utf8'),
+      truncated: false
+    };
+  }
+
+  if (!Array.isArray(contextFiles)) {
+    throw Object.assign(new Error('contextFiles precisa ser uma lista de caminhos relativos.'), { statusCode: 400 });
+  }
+
+  if (contextFiles.length > maxFiles) {
+    throw Object.assign(new Error(`contextFiles aceita no máximo ${maxFiles} arquivo(s).`), { statusCode: 400 });
+  }
+
+  const safeContext = typeof context === 'string' ? context : '';
+  const parts = safeContext ? [safeContext.slice(0, maxContextBytes)] : [];
+  const files = [];
+  let totalBytes = Buffer.byteLength(parts.join('\n'), 'utf8');
+  let truncated = false;
+
+  for (const item of contextFiles) {
+    if (typeof item !== 'string') {
+      throw Object.assign(new Error('Todos os itens de contextFiles precisam ser texto.'), { statusCode: 400 });
+    }
+
+    const file = await readProjectFile({
+      path: item.slice(0, 500),
+      projectRoot,
+      maxBytes: Math.min(maxFileReadBytes, maxContextBytes),
+      allowedFileExtensions
+    });
+
+    const header = `\n\n--- arquivo: ${file.path} (${file.sizeBytes} bytes) ---\n`;
+    const availableBytes = maxContextBytes - totalBytes - Buffer.byteLength(header, 'utf8');
+
+    if (availableBytes <= 0) {
+      truncated = true;
+      break;
+    }
+
+    let fileContent = file.content;
+    if (Buffer.byteLength(fileContent, 'utf8') > availableBytes) {
+      fileContent = Buffer.from(fileContent, 'utf8').subarray(0, availableBytes).toString('utf8');
+      truncated = true;
+    }
+
+    parts.push(`${header}${fileContent}`);
+    totalBytes = Buffer.byteLength(parts.join('\n'), 'utf8');
+    files.push({
+      path: file.path,
+      sizeBytes: file.sizeBytes,
+      includedBytes: Buffer.byteLength(fileContent, 'utf8')
+    });
+
+    if (totalBytes >= maxContextBytes) {
+      truncated = true;
+      break;
+    }
+  }
+
+  return {
+    context: parts.join('\n'),
+    files,
+    totalBytes,
+    truncated
+  };
+}
+
 async function callOllamaGenerate(prompt, signal) {
   const response = await fetch(`${OLLAMA_URL}/api/generate`, {
     method: 'POST',
@@ -390,10 +474,25 @@ async function handleGenerate(request, response) {
     return;
   }
 
+  let contextBundle;
+  try {
+    contextBundle = await buildContextFromFiles({
+      context: typeof body.context === 'string' ? body.context.slice(0, MAX_CONTEXT_BYTES) : '',
+      contextFiles: body.contextFiles
+    });
+  } catch (error) {
+    sendJson(response, error.statusCode || 500, {
+      error: error.message || 'Erro ao montar contexto.',
+      requestId,
+      fileRead: getFileReadStatus()
+    });
+    return;
+  }
+
   const prompt = buildCodingPrompt({
     task: body.task.slice(0, 8000),
     language: typeof body.language === 'string' ? body.language.slice(0, 80) : 'general',
-    context: typeof body.context === 'string' ? body.context.slice(0, 12000) : ''
+    context: contextBundle.context
   });
 
   const cached = promptCache.get(prompt);
@@ -405,6 +504,8 @@ async function handleGenerate(request, response) {
       queueWaitMs: 0,
       cached: true,
       cacheKey: cached.key,
+      contextFiles: contextBundle.files,
+      contextTruncated: contextBundle.truncated,
       response: cached.value.response || '',
       done: Boolean(cached.value.done),
       queue: getQueueStatus(),
@@ -431,6 +532,8 @@ async function handleGenerate(request, response) {
       queueWaitMs: Date.now() - queuedAt - (result.total_duration ? Math.round(result.total_duration / 1_000_000) : 0),
       cached: false,
       cacheKey,
+      contextFiles: contextBundle.files,
+      contextTruncated: contextBundle.truncated,
       response: result.response || '',
       done: Boolean(result.done),
       queue: getQueueStatus(),
@@ -529,6 +632,7 @@ function startServer() {
     console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
     console.log(`Cache: ${ENABLE_PROMPT_CACHE ? 'ativo' : 'desativado'}, limite=${MAX_CACHE_ENTRIES}`);
     console.log(`Leitura de arquivos: raiz=${PROJECT_ROOT}, limite=${MAX_FILE_READ_BYTES} bytes`);
+    console.log(`Contexto por arquivos: máximo=${MAX_CONTEXT_FILES} arquivos, limite=${MAX_CONTEXT_BYTES} bytes`);
   });
 }
 

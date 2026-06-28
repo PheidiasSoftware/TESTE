@@ -26,6 +26,12 @@ if (-not $env:MAX_CACHE_ENTRIES) { $env:MAX_CACHE_ENTRIES = "20" }
 if (-not $env:MAX_CONTEXT_FILES) { $env:MAX_CONTEXT_FILES = "4" }
 if (-not $env:MAX_CONTEXT_BYTES) { $env:MAX_CONTEXT_BYTES = "12000" }
 if (-not $env:MAX_FILE_READ_BYTES) { $env:MAX_FILE_READ_BYTES = "32768" }
+if (-not $env:ENABLE_RATE_LIMIT) { $env:ENABLE_RATE_LIMIT = "true" }
+if (-not $env:RATE_LIMIT_WINDOW_MS) { $env:RATE_LIMIT_WINDOW_MS = "60000" }
+if (-not $env:RATE_LIMIT_MAX_REQUESTS) { $env:RATE_LIMIT_MAX_REQUESTS = "30" }
+if (-not $env:RATE_LIMIT_MAX_CLIENTS) { $env:RATE_LIMIT_MAX_CLIENTS = "500" }
+if (-not $env:TRUST_PROXY) { $env:TRUST_PROXY = "false" }
+if (-not $env:LOG_LEVEL) { $env:LOG_LEVEL = "info" }
 
 Write-Host "TESTE Local Code LLM Backend" -ForegroundColor Cyan
 Write-Host "Host: $HostName"
@@ -37,6 +43,9 @@ Write-Host "Max queue size: $env:MAX_QUEUE_SIZE"
 Write-Host "Prompt cache: $env:ENABLE_PROMPT_CACHE / max entries $env:MAX_CACHE_ENTRIES"
 Write-Host "Context files: max $env:MAX_CONTEXT_FILES / max bytes $env:MAX_CONTEXT_BYTES"
 Write-Host "Max file read bytes: $env:MAX_FILE_READ_BYTES"
+Write-Host "Rate limit: $env:ENABLE_RATE_LIMIT / $env:RATE_LIMIT_MAX_REQUESTS requests per $env:RATE_LIMIT_WINDOW_MS ms / max clients $env:RATE_LIMIT_MAX_CLIENTS"
+Write-Host "Trust proxy: $env:TRUST_PROXY"
+Write-Host "Log level: $env:LOG_LEVEL"
 Write-Host ""
 
 try {

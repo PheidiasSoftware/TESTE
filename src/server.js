@@ -4,40 +4,36 @@ import { readFile, stat } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  CONFIG,
+  LOG_LEVEL_PRIORITY,
+  SENSITIVE_LOG_KEY_PATTERN
+} from './config.js';
 import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-limit.js';
 
-const HOST = process.env.HOST || '127.0.0.1';
-const PORT = Number.parseInt(process.env.PORT || '3131', 10);
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
-const MODEL = process.env.MODEL || 'qwen2.5-coder:1.5b-instruct';
-const MAX_BODY_BYTES = Number.parseInt(process.env.MAX_BODY_BYTES || '65536', 10);
-const REQUEST_TIMEOUT_MS = Number.parseInt(process.env.REQUEST_TIMEOUT_MS || '120000', 10);
-const MAX_QUEUE_SIZE = Number.parseInt(process.env.MAX_QUEUE_SIZE || '4', 10);
-const GENERATION_CONCURRENCY = Math.max(1, Number.parseInt(process.env.GENERATION_CONCURRENCY || '1', 10));
-const ENABLE_PROMPT_CACHE = process.env.ENABLE_PROMPT_CACHE !== 'false';
-const MAX_CACHE_ENTRIES = Math.max(0, Number.parseInt(process.env.MAX_CACHE_ENTRIES || '20', 10));
-const PROJECT_ROOT = resolve(process.env.PROJECT_ROOT || process.cwd());
-const MAX_FILE_READ_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_FILE_READ_BYTES || '32768', 10));
-const MAX_CONTEXT_FILES = Math.max(0, Number.parseInt(process.env.MAX_CONTEXT_FILES || '4', 10));
-const MAX_CONTEXT_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_CONTEXT_BYTES || '12000', 10));
-const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
-const ENABLE_RATE_LIMIT = process.env.ENABLE_RATE_LIMIT !== 'false';
-const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10));
-const RATE_LIMIT_MAX_REQUESTS = Math.max(1, Number.parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '30', 10));
-const RATE_LIMIT_MAX_CLIENTS = Math.max(1, Number.parseInt(process.env.RATE_LIMIT_MAX_CLIENTS || '500', 10));
-const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
-const DEFAULT_ALLOWED_FILE_EXTENSIONS = ['.css', '.dart', '.html', '.js', '.json', '.md', '.ps1', '.sql', '.ts', '.txt', '.yaml', '.yml'];
-const LOG_LEVEL_PRIORITY = { silent: 0, error: 1, warn: 2, info: 3, debug: 4 };
-const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content)/i;
-
-function getAllowedFileExtensions() {
-  const raw = process.env.ALLOWED_FILE_EXTENSIONS;
-  if (!raw) return DEFAULT_ALLOWED_FILE_EXTENSIONS;
-  const parsed = raw.split(',').map(item => item.trim().toLowerCase()).filter(Boolean).map(item => (item.startsWith('.') ? item : `.${item}`));
-  return parsed.length > 0 ? parsed : DEFAULT_ALLOWED_FILE_EXTENSIONS;
-}
-
-const ALLOWED_FILE_EXTENSIONS = getAllowedFileExtensions();
+const {
+  HOST,
+  PORT,
+  OLLAMA_URL,
+  MODEL,
+  MAX_BODY_BYTES,
+  REQUEST_TIMEOUT_MS,
+  MAX_QUEUE_SIZE,
+  GENERATION_CONCURRENCY,
+  ENABLE_PROMPT_CACHE,
+  MAX_CACHE_ENTRIES,
+  PROJECT_ROOT,
+  MAX_FILE_READ_BYTES,
+  MAX_CONTEXT_FILES,
+  MAX_CONTEXT_BYTES,
+  ALLOWED_FILE_EXTENSIONS,
+  LOG_LEVEL,
+  ENABLE_RATE_LIMIT,
+  RATE_LIMIT_WINDOW_MS,
+  RATE_LIMIT_MAX_REQUESTS,
+  RATE_LIMIT_MAX_CLIENTS,
+  TRUST_PROXY
+} = CONFIG;
 
 export function redactForLog(value, depth = 0) {
   if (depth > 5) return '[max-depth]';

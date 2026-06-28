@@ -31,6 +31,14 @@ async function withTestServer(callback) {
   }
 }
 
+const EXPECTED_ROUTES = [
+  'GET /health',
+  'GET /api/status',
+  'POST /api/generate',
+  'POST /api/generate-stream',
+  'POST /api/read-file'
+];
+
 test('buildCodingPrompt inclui foco, contexto e tarefa sem depender do Ollama', () => {
   const prompt = buildCodingPrompt({
     task: 'Criar endpoint de health check',
@@ -181,6 +189,7 @@ test('GET /health responde estado local sem chamar Ollama', async () => {
     assert.equal(typeof body.queue.activeGenerations, 'number');
     assert.equal(typeof body.cache.entries, 'number');
     assert.equal(typeof body.fileRead.maxFileReadBytes, 'number');
+    assert.deepEqual(body.routes, EXPECTED_ROUTES);
   });
 });
 
@@ -195,6 +204,7 @@ test('GET /api/status responde métricas da fila sem chamar Ollama', async () =>
     assert.equal(typeof body.queue.completedGenerations, 'number');
     assert.equal(typeof body.cache.hits, 'number');
     assert.ok(Array.isArray(body.fileRead.allowedFileExtensions));
+    assert.deepEqual(body.routes, EXPECTED_ROUTES);
   });
 });
 
@@ -204,6 +214,21 @@ test('POST /api/generate valida task antes de chamar Ollama', async () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ language: 'Node.js' })
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.match(body.error, /task precisa ser texto/);
+    assert.equal(typeof body.requestId, 'string');
+  });
+});
+
+test('POST /api/generate-stream valida task antes de abrir SSE', async () => {
+  await withTestServer(async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/generate-stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ language: 'Dart' })
     });
     const body = await response.json();
 
@@ -235,6 +260,6 @@ test('rota desconhecida responde 404 com rotas disponíveis', async () => {
 
     assert.equal(response.status, 404);
     assert.match(body.error, /Rota não encontrada/);
-    assert.deepEqual(body.routes, ['GET /health', 'GET /api/status', 'POST /api/generate', 'POST /api/read-file']);
+    assert.deepEqual(body.routes, EXPECTED_ROUTES);
   });
 });

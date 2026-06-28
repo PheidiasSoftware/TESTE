@@ -10,6 +10,12 @@ import {
   LOG_LEVEL_PRIORITY,
   SENSITIVE_LOG_KEY_PATTERN
 } from './config.js';
+import {
+  openEventStream,
+  readJsonBody as readJsonBodyFromRequest,
+  sendJson,
+  sendServerEvent
+} from './http.js';
 import { createOllamaClient } from './ollama.js';
 import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-limit.js';
 
@@ -108,46 +114,8 @@ const promptCache = createPromptCache({ enabled: ENABLE_PROMPT_CACHE, maxEntries
 const rateLimiter = createFixedWindowRateLimiter({ enabled: ENABLE_RATE_LIMIT, windowMs: RATE_LIMIT_WINDOW_MS, maxRequests: RATE_LIMIT_MAX_REQUESTS, maxClients: RATE_LIMIT_MAX_CLIENTS });
 const ollamaClient = createOllamaClient({ baseUrl: OLLAMA_URL, model: MODEL });
 
-function sendJson(response, statusCode, payload, headers = {}) {
-  response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers });
-  response.end(JSON.stringify(payload, null, 2));
-}
-
-function sendServerEvent(response, event, payload) {
-  response.write(`event: ${event}\n`);
-  response.write(`data: ${JSON.stringify(payload)}\n\n`);
-}
-
-function openEventStream(response) {
-  response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
-}
-
 function readJsonBody(request) {
-  return new Promise((resolvePromise, reject) => {
-    let size = 0;
-    let raw = '';
-    request.on('data', chunk => {
-      size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
-        reject(Object.assign(new Error('Payload muito grande.'), { statusCode: 413 }));
-        request.destroy();
-        return;
-      }
-      raw += chunk;
-    });
-    request.on('end', () => {
-      if (!raw.trim()) {
-        resolvePromise({});
-        return;
-      }
-      try {
-        resolvePromise(JSON.parse(raw));
-      } catch {
-        reject(Object.assign(new Error('JSON inválido.'), { statusCode: 400 }));
-      }
-    });
-    request.on('error', reject);
-  });
+  return readJsonBodyFromRequest(request, { maxBodyBytes: MAX_BODY_BYTES });
 }
 
 function getQueueStatus() {

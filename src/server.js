@@ -21,6 +21,7 @@ const PROJECT_ROOT = resolve(process.env.PROJECT_ROOT || process.cwd());
 const MAX_FILE_READ_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_FILE_READ_BYTES || '32768', 10));
 const MAX_CONTEXT_FILES = Math.max(0, Number.parseInt(process.env.MAX_CONTEXT_FILES || '4', 10));
 const MAX_CONTEXT_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_CONTEXT_BYTES || '12000', 10));
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
 const DEFAULT_ALLOWED_FILE_EXTENSIONS = [
   '.css',
   '.dart',
@@ -35,6 +36,14 @@ const DEFAULT_ALLOWED_FILE_EXTENSIONS = [
   '.yaml',
   '.yml'
 ];
+const LOG_LEVEL_PRIORITY = {
+  silent: 0,
+  error: 1,
+  warn: 2,
+  info: 3,
+  debug: 4
+};
+const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content)/i;
 
 function getAllowedFileExtensions() {
   const raw = process.env.ALLOWED_FILE_EXTENSIONS;
@@ -52,6 +61,69 @@ function getAllowedFileExtensions() {
 }
 
 const ALLOWED_FILE_EXTENSIONS = getAllowedFileExtensions();
+
+export function redactForLog(value, depth = 0) {
+  if (depth > 5) {
+    return '[max-depth]';
+  }
+
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return value.length > 300 ? `${value.slice(0, 300)}...` : value;
+  }
+
+  if (typeof value !== 'object') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 20).map(item => redactForLog(item, depth + 1));
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      SENSITIVE_LOG_KEY_PATTERN.test(key) ? '[redacted]' : redactForLog(item, depth + 1)
+    ])
+  );
+}
+
+export function createStructuredLogger({ level = 'info', sink = console.log } = {}) {
+  const configuredPriority = LOG_LEVEL_PRIORITY[level] ?? LOG_LEVEL_PRIORITY.info;
+
+  function shouldLog(eventLevel) {
+    const eventPriority = LOG_LEVEL_PRIORITY[eventLevel] ?? LOG_LEVEL_PRIORITY.info;
+    return configuredPriority > 0 && eventPriority <= configuredPriority;
+  }
+
+  function log(eventLevel, event, details = {}) {
+    if (!shouldLog(eventLevel)) {
+      return;
+    }
+
+    const entry = {
+      timestamp: new Date().toISOString(),
+      level: eventLevel,
+      service: 'teste-local-code-llm-backend',
+      event,
+      ...redactForLog(details)
+    };
+
+    sink(JSON.stringify(entry));
+  }
+
+  return {
+    error: (event, details) => log('error', event, details),
+    warn: (event, details) => log('warn', event, details),
+    info: (event, details) => log('info', event, details),
+    debug: (event, details) => log('debug', event, details)
+  };
+}
+
+const logger = createStructuredLogger({ level: LOG_LEVEL });
 
 export function createPromptCache({ enabled = true, maxEntries = 20 } = {}) {
   const entries = new Map();
@@ -268,6 +340,14 @@ function getFileReadStatus() {
     maxContextFiles: MAX_CONTEXT_FILES,
     maxContextBytes: MAX_CONTEXT_BYTES,
     allowedFileExtensions: ALLOWED_FILE_EXTENSIONS
+  };
+}
+
+function getLogStatus() {
+  return {
+    level: LOG_LEVEL,
+    format: 'json-lines',
+    redaction: 'sensitive-fields'
   };
 }
 
@@ -584,9 +664,21 @@ async function handleGenerate(request, response) {
   const startedAt = Date.now();
   let payload;
 
+  logger.info('generate.request.received', {
+    requestId,
+    route: 'POST /api/generate',
+    method: request.method,
+    contentLength: request.headers['content-length']
+  });
+
   try {
     payload = await buildGenerateRequestPayload(request, requestId);
   } catch (error) {
+    logger.warn('generate.request.invalid', {
+      requestId,
+      statusCode: error.statusCode || 500,
+      error: error.message
+    });
     sendJson(response, error.statusCode || 500, {
       error: error.message || 'Erro ao montar requisição.',
       requestId,
@@ -598,6 +690,14 @@ async function handleGenerate(request, response) {
   const { prompt, contextBundle } = payload;
   const cached = promptCache.get(prompt);
   if (cached) {
+    logger.info('generate.cache.hit', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      contextFilesCount: contextBundle.files.length,
+      contextTruncated: contextBundle.truncated,
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
     sendJson(response, 200, {
       requestId,
       model: MODEL,
@@ -626,10 +726,21 @@ async function handleGenerate(request, response) {
       done: Boolean(result.done)
     });
 
+    const durationMs = Date.now() - startedAt;
+    logger.info('generate.request.completed', {
+      requestId,
+      durationMs,
+      cached: false,
+      contextFilesCount: contextBundle.files.length,
+      contextTruncated: contextBundle.truncated,
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
+
     sendJson(response, 200, {
       requestId,
       model: MODEL,
-      durationMs: Date.now() - startedAt,
+      durationMs,
       queueWaitMs: Date.now() - queuedAt - (result.total_duration ? Math.round(result.total_duration / 1_000_000) : 0),
       cached: false,
       cacheKey,
@@ -642,6 +753,14 @@ async function handleGenerate(request, response) {
     });
   } catch (error) {
     const aborted = error?.name === 'AbortError';
+    logger.error('generate.request.failed', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      statusCode: aborted ? 504 : error.statusCode || 500,
+      error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
     sendJson(response, aborted ? 504 : error.statusCode || 500, {
       error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
       detail: error.detail,
@@ -659,9 +778,21 @@ async function handleGenerateStream(request, response) {
   const startedAt = Date.now();
   let payload;
 
+  logger.info('generate_stream.request.received', {
+    requestId,
+    route: 'POST /api/generate-stream',
+    method: request.method,
+    contentLength: request.headers['content-length']
+  });
+
   try {
     payload = await buildGenerateRequestPayload(request, requestId);
   } catch (error) {
+    logger.warn('generate_stream.request.invalid', {
+      requestId,
+      statusCode: error.statusCode || 500,
+      error: error.message
+    });
     sendJson(response, error.statusCode || 500, {
       error: error.message || 'Erro ao montar requisição de streaming.',
       requestId,
@@ -689,6 +820,14 @@ async function handleGenerateStream(request, response) {
     if (cachedResponse) {
       sendServerEvent(response, 'token', { requestId, token: cachedResponse });
     }
+    logger.info('generate_stream.cache.hit', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      contextFilesCount: contextBundle.files.length,
+      contextTruncated: contextBundle.truncated,
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
     sendServerEvent(response, 'done', {
       requestId,
       durationMs: Date.now() - startedAt,
@@ -715,6 +854,16 @@ async function handleGenerateStream(request, response) {
       done: Boolean(result.done)
     });
 
+    logger.info('generate_stream.request.completed', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      cached: false,
+      contextFilesCount: contextBundle.files.length,
+      contextTruncated: contextBundle.truncated,
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
+
     sendServerEvent(response, 'done', {
       requestId,
       durationMs: Date.now() - startedAt,
@@ -726,6 +875,14 @@ async function handleGenerateStream(request, response) {
     });
   } catch (error) {
     const aborted = error?.name === 'AbortError';
+    logger.error('generate_stream.request.failed', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      statusCode: aborted ? 504 : error.statusCode || 500,
+      error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
     sendServerEvent(response, 'error', {
       requestId,
       error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
@@ -741,11 +898,26 @@ async function handleGenerateStream(request, response) {
 
 async function handleReadFile(request, response) {
   const requestId = randomUUID();
+  const startedAt = Date.now();
   const body = await readJsonBody(request);
+
+  logger.info('read_file.request.received', {
+    requestId,
+    route: 'POST /api/read-file',
+    method: request.method,
+    contentLength: request.headers['content-length']
+  });
 
   try {
     const result = await readProjectFile({
       path: typeof body.path === 'string' ? body.path.slice(0, 500) : body.path
+    });
+
+    logger.info('read_file.request.completed', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      path: result.path,
+      sizeBytes: result.sizeBytes
     });
 
     sendJson(response, 200, {
@@ -753,6 +925,12 @@ async function handleReadFile(request, response) {
       ...result
     });
   } catch (error) {
+    logger.warn('read_file.request.failed', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      statusCode: error.statusCode || 500,
+      error: error.message
+    });
     sendJson(response, error.statusCode || 500, {
       error: error.message || 'Erro ao ler arquivo.',
       requestId,
@@ -782,6 +960,7 @@ export const server = createServer(async (request, response) => {
         queue: getQueueStatus(),
         cache: getCacheStatus(),
         fileRead: getFileReadStatus(),
+        logging: getLogStatus(),
         routes: ROUTES
       });
       return;
@@ -795,6 +974,7 @@ export const server = createServer(async (request, response) => {
         queue: getQueueStatus(),
         cache: getCacheStatus(),
         fileRead: getFileReadStatus(),
+        logging: getLogStatus(),
         routes: ROUTES
       });
       return;
@@ -820,6 +1000,10 @@ export const server = createServer(async (request, response) => {
       routes: ROUTES
     });
   } catch (error) {
+    logger.error('http.request.failed', {
+      statusCode: error.statusCode || 500,
+      error: error.message
+    });
     sendJson(response, error.statusCode || 500, {
       error: error.message || 'Erro interno.'
     });
@@ -828,12 +1012,29 @@ export const server = createServer(async (request, response) => {
 
 function startServer() {
   server.listen(PORT, HOST, () => {
+    logger.info('server.started', {
+      host: HOST,
+      port: PORT,
+      model: MODEL,
+      ollamaUrl: OLLAMA_URL,
+      generationConcurrency: GENERATION_CONCURRENCY,
+      maxQueueSize: MAX_QUEUE_SIZE,
+      promptCacheEnabled: ENABLE_PROMPT_CACHE,
+      maxCacheEntries: MAX_CACHE_ENTRIES,
+      projectRoot: PROJECT_ROOT,
+      maxFileReadBytes: MAX_FILE_READ_BYTES,
+      maxContextFiles: MAX_CONTEXT_FILES,
+      maxContextBytes: MAX_CONTEXT_BYTES,
+      logLevel: LOG_LEVEL
+    });
+
     console.log(`Backend local ouvindo em http://${HOST}:${PORT}`);
     console.log(`Modelo configurado: ${MODEL}`);
     console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
     console.log(`Cache: ${ENABLE_PROMPT_CACHE ? 'ativo' : 'desativado'}, limite=${MAX_CACHE_ENTRIES}`);
     console.log(`Leitura de arquivos: raiz=${PROJECT_ROOT}, limite=${MAX_FILE_READ_BYTES} bytes`);
     console.log(`Contexto por arquivos: máximo=${MAX_CONTEXT_FILES} arquivos, limite=${MAX_CONTEXT_BYTES} bytes`);
+    console.log(`Logs estruturados: nível=${LOG_LEVEL}, formato=json-lines`);
     console.log('Streaming: POST /api/generate-stream com Server-Sent Events');
   });
 }

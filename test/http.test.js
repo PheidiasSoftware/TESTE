@@ -31,6 +31,10 @@ function createMockResponse() {
 
 function createMockRequest(chunks = []) {
   const request = new EventEmitter();
+  request.destroyedByHelper = false;
+  request.destroy = () => {
+    request.destroyedByHelper = true;
+  };
   process.nextTick(() => {
     for (const chunk of chunks) request.emit('data', Buffer.from(chunk));
     request.emit('end');
@@ -74,10 +78,23 @@ test('readJsonBody lê JSON, aceita corpo vazio e bloqueia payload grande', asyn
   assert.deepEqual(await readJsonBody(createMockRequest(['{"a":1}'])), { a: 1 });
   assert.deepEqual(await readJsonBody(createMockRequest(['   '])), {});
 
+  const oversizedRequest = createMockRequest(['123456']);
   await assert.rejects(
-    () => readJsonBody(createMockRequest(['123456']), { maxBodyBytes: 4 }),
+    () => readJsonBody(oversizedRequest, { maxBodyBytes: 4 }),
     error => error.statusCode === 413
   );
+  assert.equal(oversizedRequest.destroyedByHelper, true);
+});
+
+test('readJsonBody permite não destruir stream ao exceder limite quando configurado', async () => {
+  const oversizedRequest = createMockRequest(['123456']);
+
+  await assert.rejects(
+    () => readJsonBody(oversizedRequest, { maxBodyBytes: 4, destroyOnLimit: false }),
+    error => error.statusCode === 413
+  );
+
+  assert.equal(oversizedRequest.destroyedByHelper, false);
 });
 
 test('readJsonBody retorna erro 400 para JSON inválido', async () => {

@@ -6,6 +6,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
+    "start:windows": "powershell -ExecutionPolicy Bypass -File scripts/start-windows.ps1",
     "dev": "node --watch src/server.js",
     "test": "node --test"
   },

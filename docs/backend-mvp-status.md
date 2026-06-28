@@ -18,7 +18,7 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 - `POST /api/generate-stream` com Server-Sent Events.
 - `POST /api/read-file` para leitura segura de arquivos textuais pequenos.
 - Fila simples de geração com concorrência conservadora.
-- Cache em memória por hash de prompt.
+- Cache em memória por hash de prompt integrado via `src/cache.js`.
 - Leitura segura de arquivos textuais pequenos com allowlist e bloqueio de caminhos sensíveis.
 - `contextFiles` em `/api/generate` reutilizando a leitura segura.
 - Rate limit local em memória nas rotas pesadas.
@@ -33,7 +33,7 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 
 - Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js`, `src/ollama.js` e `src/cache.js`, mas `src/server.js` ainda concentra parte da lógica principal.
 - Cliente Ollama: `src/ollama.js` já possui helpers testáveis para payload e parsing de streaming, mas a integração completa no servidor deve ser feita em passo pequeno e validado.
-- Cache: `src/cache.js` já possui implementação testável equivalente ao cache atual do servidor, mas ainda falta trocar o cache interno de `src/server.js` pelo módulo.
+- Cache: `src/cache.js` está integrado ao servidor e mantém testes próprios; manter este item sob observação apenas para validação de CI/local após mudanças no `src/server.js`.
 
 ## Não faz parte do MVP backend
 
@@ -56,10 +56,9 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 
 1. Integrar `src/ollama.js` em `src/server.js` em commit pequeno, substituindo apenas montagem de payload e parsing de linha de streaming.
 2. Integrar `src/http.js` em `src/server.js` em commit pequeno, preservando `MAX_BODY_BYTES`.
-3. Integrar `src/cache.js` em `src/server.js` substituindo a função interna duplicada, sem alterar o formato de `/health` e `/api/status`.
-4. Extrair fila para `src/generation-queue.js` com testes próprios.
-5. Extrair leitura segura para `src/project-files.js` com testes próprios.
-6. Depois da modularização, revisar se o backend atende formalmente ao MVP e registrar decisão.
+3. Extrair fila para `src/generation-queue.js` com testes próprios.
+4. Extrair leitura segura para `src/project-files.js` com testes próprios.
+5. Depois da modularização, revisar se o backend atende formalmente ao MVP e registrar decisão.
 
 ## Decisão operacional
 

@@ -202,3 +202,71 @@ Implementar leitura segura e limitada de arquivos textuais do próprio projeto, 
 ### Próximo passo sugerido
 
 Na próxima execução segura, priorizar a integração controlada de arquivos lidos ao `/api/generate` ou criar endpoint de streaming separado, mantendo o backend leve e sem execução automática de código do usuário.
+
+## 2026-06-27 23:35 - Contexto seguro por arquivos no `/api/generate`
+
+### Avaliação inicial desta execução
+
+- Repositório analisado antes de qualquer alteração.
+- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `scripts/start-windows.ps1`, `memory.md` e `PROJECT_MEMORY.md`.
+- `README.md` já documentava backend local com Ollama, fila, cache, leitura segura de arquivos, testes, script Windows e próximos passos.
+- `package.json` continuava sem dependências externas, com Node.js 20+ e `node --test`.
+- `src/server.js` já continha leitura segura via `POST /api/read-file`, mas `/api/generate` ainda recebia apenas `context` manual.
+- `test/server.test.js` cobria leitura segura e rotas locais; ainda faltava teste específico para montagem de contexto a partir de lista de arquivos.
+- `scripts/start-windows.ps1` permanecia conservador e não executava código gerado.
+- Não foram encontrados registros claros de Claude Agent, instruções conflitantes, issues abertas ou PRs relevantes durante a análise.
+
+### Decisão tomada
+
+Integrar leitura segura de arquivos ao fluxo de geração por meio do campo opcional `contextFiles`, mantendo limites rígidos de quantidade e tamanho. A melhoria torna o backend mais útil para programação real sem permitir execução automática de código do usuário.
+
+### Arquivos alterados/criados
+
+- `src/server.js`
+  - Adicionadas variáveis `MAX_CONTEXT_FILES` e `MAX_CONTEXT_BYTES`.
+  - Criada função exportada `buildContextFromFiles()`.
+  - `POST /api/generate` agora aceita `contextFiles` como lista de caminhos relativos.
+  - O contexto final combina `context` manual com arquivos lidos de forma segura.
+  - A resposta informa `contextFiles` incluídos e `contextTruncated` quando houver corte por limite.
+  - `/health` e `/api/status` agora expõem limites de contexto por arquivo.
+
+- `test/context-files.test.js`
+  - Criado teste de montagem de contexto com arquivos seguros em diretório temporário.
+  - Criado teste de bloqueio por excesso de arquivos.
+  - Criado teste para rejeitar itens inválidos na lista.
+
+- `README.md`
+  - Documentado `contextFiles` no `POST /api/generate`.
+  - Documentadas variáveis `MAX_CONTEXT_FILES` e `MAX_CONTEXT_BYTES`.
+  - Atualizadas seções de proteção para PC fraco, testes, decisões de arquitetura e próximos passos.
+
+- `memory.md`
+  - Registrada esta execução com avaliação, decisão, alterações, validações, riscos, pendências e próximo passo.
+
+### Validações executadas
+
+- Validação estática manual do fluxo de `contextFiles` antes da chamada ao Ollama.
+- Conferido que os arquivos são lidos pela mesma função segura usada em `POST /api/read-file`.
+- Conferido que a melhoria não adiciona dependências externas.
+- Conferido que o backend continua sem execução automática de código do usuário.
+- Conferido que os novos testes não chamam Ollama.
+- Não foi possível executar `npm test` diretamente pelo conector GitHub; validação final deve ser feita localmente ou por CI futuro.
+
+### Riscos e observações
+
+- A montagem de contexto corta conteúdo quando `MAX_CONTEXT_BYTES` é atingido; isso é intencional para proteger PCs com 8 GB RAM.
+- `contextFiles` depende de `PROJECT_ROOT`; recomenda-se iniciar o backend na raiz do projeto ou definir `PROJECT_ROOT` explicitamente.
+- O teste novo foi criado em arquivo separado para reduzir risco de conflito com o teste existente.
+- Ainda não há CI automático para validar os testes após cada commit.
+
+### Pendências atualizadas
+
+1. Executar `npm test` localmente em Windows/Node.js 20+.
+2. Testar `npm run start:windows` em Windows real com Ollama instalado.
+3. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
+4. Documentar integração futura com plugin/extensão VS Code.
+5. Considerar CI leve com GitHub Actions usando Node.js 20.
+
+### Próximo passo sugerido
+
+Na próxima execução segura, priorizar endpoint de streaming separado ou CI leve com GitHub Actions, mantendo o projeto sem dependências pesadas e com foco em PC fraco sem GPU.

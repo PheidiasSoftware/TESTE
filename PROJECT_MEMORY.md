@@ -189,3 +189,71 @@ Implementar cache em memória pequeno e reversível por hash SHA-256 do prompt f
 ### Próximo passo sugerido
 
 Na próxima execução segura, priorizar scripts Windows de inicialização ou leitura segura de arquivos do projeto, mantendo o backend leve, local e sem execução automática de código do usuário.
+
+## 2026-06-27 21:36 - Script Windows de inicialização conservadora
+
+### Avaliação inicial
+
+- Repositório analisado antes de qualquer alteração.
+- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `memory.md` e `PROJECT_MEMORY.md`.
+- `README.md` documentava backend local com Ollama, fila, cache, testes, endpoints e indicava scripts Windows como próximo passo.
+- `package.json` continuava sem dependências externas e com scripts `start`, `dev` e `test`.
+- `src/server.js` já possuía HTTP nativo, fila conservadora, cache em memória, limite de payload, timeout, rotas de saúde/status e geração via Ollama.
+- `test/server.test.js` cobria prompt, fila, cache e rotas HTTP locais sem chamar Ollama.
+- `memory.md` contém o histórico inicial e `PROJECT_MEMORY.md` contém o histórico complementar das últimas execuções.
+- Busca textual no repositório não retornou índice útil para Claude Agent; nos arquivos lidos não havia instruções, estado ou conflitos do Claude Agent.
+- Busca de issues abertas para backend/LLM/Ollama/Claude/memory não retornou resultados.
+- Busca de PRs recentes no repositório não retornou resultados.
+
+### Decisão tomada
+
+Executar uma melhoria pequena, segura e reversível: adicionar um script PowerShell para Windows que inicializa o backend com padrões conservadores para 8 GB RAM sem GPU e verifica se o Ollama está respondendo antes do uso efetivo de `/api/generate`.
+
+### Arquivos alterados/criados
+
+- `scripts/start-windows.ps1`
+  - Criado helper PowerShell para rodar a partir da raiz do repositório.
+  - Define padrões seguros apenas quando variáveis não foram informadas: `GENERATION_CONCURRENCY=1`, `MAX_QUEUE_SIZE=4`, `ENABLE_PROMPT_CACHE=true`, `MAX_CACHE_ENTRIES=20`.
+  - Exibe configuração efetiva de host, porta, Ollama, modelo, fila e cache.
+  - Verifica `OLLAMA_URL/api/tags` com timeout curto e orienta `ollama pull` se o Ollama não responder.
+  - Inicia `node src/server.js` sem executar código gerado pelo modelo.
+
+- `package.json`
+  - Adicionado script `start:windows` para chamar o helper PowerShell.
+  - Mantido projeto sem dependências externas.
+
+- `README.md`
+  - Adicionada seção `Como rodar no Windows`.
+  - Documentado uso de `npm run start:windows` e execução direta do script.
+  - Atualizadas decisões de arquitetura e próximos passos.
+
+- `PROJECT_MEMORY.md`
+  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos e pendências.
+
+### Validações executadas
+
+- Validação estática manual do script PowerShell.
+- Conferido que o script não instala pacotes, não baixa modelos automaticamente e não executa código de usuário.
+- Conferido que as configurações conservadoras só são aplicadas quando variáveis de ambiente não existem, preservando customização do usuário.
+- Conferido que `package.json` permanece sem dependências externas.
+- Não foi possível executar `npm test` ou o PowerShell pelo conector GitHub; validação final deve ser feita localmente no Windows com Node.js 20+.
+
+### Riscos
+
+- A execução via `npm run start:windows` depende de PowerShell disponível no Windows.
+- `ExecutionPolicy Bypass` é usado somente para este processo, para facilitar execução local do script do próprio repositório.
+- A checagem do Ollama é apenas informativa; o backend ainda inicia mesmo se o Ollama não estiver respondendo, permitindo usar `/health` e `/api/status`.
+- Ainda não há CI automático para validar os testes após cada commit.
+
+### Pendências atualizadas
+
+1. Executar `npm test` localmente em Windows/Node.js 20+.
+2. Testar `npm run start:windows` em Windows real com Ollama instalado.
+3. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
+4. Criar leitura segura de arquivos do projeto com allowlist, limite de tamanho e bloqueio de caminhos perigosos.
+5. Documentar integração futura com plugin/extensão VS Code.
+6. Considerar CI leve com GitHub Actions usando Node.js 20 quando o repositório estiver pronto para validação automática.
+
+### Próximo passo sugerido
+
+Na próxima execução segura, priorizar leitura segura de arquivos do projeto com allowlist e limite de tamanho, pois isso aproxima o backend de um assistente útil para programação sem permitir execução automática insegura de código.

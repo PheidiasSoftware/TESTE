@@ -28,11 +28,12 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 - CI leve com Node.js 20.
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves e integração de clientes.
 - README principal com links para arquitetura, contrato da API, status do MVP, streaming, rate limit, seleção de modelos e integração de clientes.
+- Helpers de cliente Ollama em `src/ollama.js` para montagem de payload, parse de JSONL streaming, chamada não-streaming e leitura de stream, com testes isolados por `fetchImpl` fake.
 
 ## Critérios parcialmente atendidos
 
 - Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js`, `src/ollama.js` e `src/cache.js`, mas `src/server.js` ainda concentra parte da lógica principal.
-- Cliente Ollama: `src/ollama.js` já possui helpers testáveis para payload e parsing de streaming, mas a integração completa no servidor deve ser feita em passo pequeno e validado.
+- Cliente Ollama: `src/ollama.js` já possui helpers testáveis para payload, parsing, cliente não-streaming e leitura de streaming; a integração completa no servidor deve ser feita em passo pequeno e validado.
 - Cache: `src/cache.js` está integrado ao servidor e mantém testes próprios; manter este item sob observação apenas para validação de CI/local após mudanças no `src/server.js`.
 
 ## Não faz parte do MVP backend

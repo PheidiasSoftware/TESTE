@@ -21,19 +21,25 @@ export function openEventStream(response) {
   });
 }
 
-export function readJsonBody(request, { maxBodyBytes = 65_536 } = {}) {
+export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = true } = {}) {
   return new Promise((resolve, reject) => {
     let size = 0;
     let raw = '';
-    let rejected = false;
+    let settled = false;
+
+    function fail(error) {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    }
 
     request.on('data', chunk => {
-      if (rejected) return;
+      if (settled) return;
       size += chunk.length;
 
       if (size > maxBodyBytes) {
-        rejected = true;
-        reject(Object.assign(new Error('Payload muito grande.'), { statusCode: 413 }));
+        fail(Object.assign(new Error('Payload muito grande.'), { statusCode: 413 }));
+        if (destroyOnLimit && typeof request.destroy === 'function') request.destroy();
         return;
       }
 
@@ -41,7 +47,9 @@ export function readJsonBody(request, { maxBodyBytes = 65_536 } = {}) {
     });
 
     request.on('end', () => {
-      if (rejected) return;
+      if (settled) return;
+      settled = true;
+
       if (!raw.trim()) {
         resolve({});
         return;
@@ -54,6 +62,9 @@ export function readJsonBody(request, { maxBodyBytes = 65_536 } = {}) {
       }
     });
 
-    request.on('error', reject);
+    request.on('error', error => {
+      if (settled && error?.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
+      fail(error);
+    });
   });
 }

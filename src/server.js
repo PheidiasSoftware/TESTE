@@ -207,6 +207,20 @@ function sendJson(response, statusCode, payload) {
   response.end(body);
 }
 
+function sendServerEvent(response, event, payload) {
+  response.write(`event: ${event}\n`);
+  response.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function openEventStream(response) {
+  response.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-store, no-transform',
+    connection: 'keep-alive',
+    'x-accel-buffering': 'no'
+  });
+}
+
 function readJsonBody(request) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -461,33 +475,97 @@ async function callOllamaGenerate(prompt, signal) {
   return response.json();
 }
 
-async function handleGenerate(request, response) {
-  const requestId = randomUUID();
-  const startedAt = Date.now();
+async function callOllamaGenerateStream(prompt, { signal, onToken } = {}) {
+  const response = await fetch(`${OLLAMA_URL}/api/generate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL,
+      prompt,
+      stream: true,
+      options: {
+        num_ctx: 2048,
+        num_predict: 512,
+        temperature: 0.2
+      }
+    }),
+    signal
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw Object.assign(new Error('Falha ao chamar Ollama em streaming.'), {
+      statusCode: 502,
+      detail: detail.slice(0, 500)
+    });
+  }
+
+  if (!response.body) {
+    throw Object.assign(new Error('Runtime local não retornou corpo de streaming.'), { statusCode: 502 });
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullResponse = '';
+  let done = false;
+
+  while (!done) {
+    const chunk = await reader.read();
+    done = chunk.done;
+    buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !done });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+
+      if (parsed.response) {
+        fullResponse += parsed.response;
+        onToken?.(parsed.response, parsed);
+      }
+
+      if (parsed.done) {
+        return {
+          response: fullResponse,
+          done: true,
+          total_duration: parsed.total_duration
+        };
+      }
+    }
+  }
+
+  return {
+    response: fullResponse,
+    done: false
+  };
+}
+
+async function buildGenerateRequestPayload(request, requestId) {
   const body = await readJsonBody(request);
 
   if (!body.task || typeof body.task !== 'string') {
-    sendJson(response, 400, {
-      error: 'Campo obrigatório: task precisa ser texto.',
+    throw Object.assign(new Error('Campo obrigatório: task precisa ser texto.'), {
+      statusCode: 400,
       requestId
     });
-    return;
   }
 
-  let contextBundle;
-  try {
-    contextBundle = await buildContextFromFiles({
-      context: typeof body.context === 'string' ? body.context.slice(0, MAX_CONTEXT_BYTES) : '',
-      contextFiles: body.contextFiles
-    });
-  } catch (error) {
-    sendJson(response, error.statusCode || 500, {
-      error: error.message || 'Erro ao montar contexto.',
-      requestId,
-      fileRead: getFileReadStatus()
-    });
-    return;
-  }
+  const contextBundle = await buildContextFromFiles({
+    context: typeof body.context === 'string' ? body.context.slice(0, MAX_CONTEXT_BYTES) : '',
+    contextFiles: body.contextFiles
+  });
 
   const prompt = buildCodingPrompt({
     task: body.task.slice(0, 8000),
@@ -495,6 +573,29 @@ async function handleGenerate(request, response) {
     context: contextBundle.context
   });
 
+  return {
+    prompt,
+    contextBundle
+  };
+}
+
+async function handleGenerate(request, response) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  let payload;
+
+  try {
+    payload = await buildGenerateRequestPayload(request, requestId);
+  } catch (error) {
+    sendJson(response, error.statusCode || 500, {
+      error: error.message || 'Erro ao montar requisição.',
+      requestId,
+      fileRead: error.statusCode === 400 ? undefined : getFileReadStatus()
+    });
+    return;
+  }
+
+  const { prompt, contextBundle } = payload;
   const cached = promptCache.get(prompt);
   if (cached) {
     sendJson(response, 200, {
@@ -553,6 +654,91 @@ async function handleGenerate(request, response) {
   }
 }
 
+async function handleGenerateStream(request, response) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  let payload;
+
+  try {
+    payload = await buildGenerateRequestPayload(request, requestId);
+  } catch (error) {
+    sendJson(response, error.statusCode || 500, {
+      error: error.message || 'Erro ao montar requisição de streaming.',
+      requestId,
+      fileRead: error.statusCode === 400 ? undefined : getFileReadStatus()
+    });
+    return;
+  }
+
+  const { prompt, contextBundle } = payload;
+  const cached = promptCache.get(prompt);
+
+  openEventStream(response);
+  sendServerEvent(response, 'metadata', {
+    requestId,
+    model: MODEL,
+    cached: Boolean(cached),
+    contextFiles: contextBundle.files,
+    contextTruncated: contextBundle.truncated,
+    queue: getQueueStatus(),
+    cache: getCacheStatus()
+  });
+
+  if (cached) {
+    const cachedResponse = cached.value.response || '';
+    if (cachedResponse) {
+      sendServerEvent(response, 'token', { requestId, token: cachedResponse });
+    }
+    sendServerEvent(response, 'done', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      cached: true,
+      done: Boolean(cached.value.done),
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
+    response.end();
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const result = await generationQueue.run(() => callOllamaGenerateStream(prompt, {
+      signal: controller.signal,
+      onToken: token => sendServerEvent(response, 'token', { requestId, token })
+    }));
+
+    const cacheKey = promptCache.set(prompt, {
+      response: result.response || '',
+      done: Boolean(result.done)
+    });
+
+    sendServerEvent(response, 'done', {
+      requestId,
+      durationMs: Date.now() - startedAt,
+      cached: false,
+      cacheKey,
+      done: Boolean(result.done),
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
+  } catch (error) {
+    const aborted = error?.name === 'AbortError';
+    sendServerEvent(response, 'error', {
+      requestId,
+      error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
+      detail: error.detail,
+      queue: getQueueStatus(),
+      cache: getCacheStatus()
+    });
+  } finally {
+    clearTimeout(timeout);
+    response.end();
+  }
+}
+
 async function handleReadFile(request, response) {
   const requestId = randomUUID();
   const body = await readJsonBody(request);
@@ -575,6 +761,14 @@ async function handleReadFile(request, response) {
   }
 }
 
+const ROUTES = [
+  'GET /health',
+  'GET /api/status',
+  'POST /api/generate',
+  'POST /api/generate-stream',
+  'POST /api/read-file'
+];
+
 export const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url || '/', `http://${request.headers.host || HOST}`);
@@ -587,7 +781,8 @@ export const server = createServer(async (request, response) => {
         ollamaUrl: OLLAMA_URL,
         queue: getQueueStatus(),
         cache: getCacheStatus(),
-        fileRead: getFileReadStatus()
+        fileRead: getFileReadStatus(),
+        routes: ROUTES
       });
       return;
     }
@@ -599,13 +794,19 @@ export const server = createServer(async (request, response) => {
         ollamaUrl: OLLAMA_URL,
         queue: getQueueStatus(),
         cache: getCacheStatus(),
-        fileRead: getFileReadStatus()
+        fileRead: getFileReadStatus(),
+        routes: ROUTES
       });
       return;
     }
 
     if (request.method === 'POST' && url.pathname === '/api/generate') {
       await handleGenerate(request, response);
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/generate-stream') {
+      await handleGenerateStream(request, response);
       return;
     }
 
@@ -616,7 +817,7 @@ export const server = createServer(async (request, response) => {
 
     sendJson(response, 404, {
       error: 'Rota não encontrada.',
-      routes: ['GET /health', 'GET /api/status', 'POST /api/generate', 'POST /api/read-file']
+      routes: ROUTES
     });
   } catch (error) {
     sendJson(response, error.statusCode || 500, {
@@ -633,6 +834,7 @@ function startServer() {
     console.log(`Cache: ${ENABLE_PROMPT_CACHE ? 'ativo' : 'desativado'}, limite=${MAX_CACHE_ENTRIES}`);
     console.log(`Leitura de arquivos: raiz=${PROJECT_ROOT}, limite=${MAX_FILE_READ_BYTES} bytes`);
     console.log(`Contexto por arquivos: máximo=${MAX_CONTEXT_FILES} arquivos, limite=${MAX_CONTEXT_BYTES} bytes`);
+    console.log('Streaming: POST /api/generate-stream com Server-Sent Events');
   });
 }
 

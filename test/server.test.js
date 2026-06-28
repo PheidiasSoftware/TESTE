@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
-import { buildCodingPrompt, createGenerationQueue, createPromptCache, server } from '../src/server.js';
+import {
+  buildCodingPrompt,
+  createGenerationQueue,
+  createPromptCache,
+  readProjectFile,
+  server,
+  validateSafeProjectFilePath
+} from '../src/server.js';
 
 async function withTestServer(callback) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -93,6 +103,68 @@ test('createPromptCache reutiliza resposta por hash e limita entradas', () => {
   assert.equal(cache.getStatus().evictions, 1);
 });
 
+test('validateSafeProjectFilePath permite arquivo relativo com extensão aprovada', () => {
+  const projectRoot = '/tmp/projeto-teste';
+  const result = validateSafeProjectFilePath({
+    requestedPath: 'src/index.js',
+    projectRoot,
+    allowedFileExtensions: ['.js']
+  });
+
+  assert.equal(result.relativePath, 'src/index.js');
+});
+
+test('validateSafeProjectFilePath bloqueia travessia, dependências e .env', () => {
+  const projectRoot = '/tmp/projeto-teste';
+
+  assert.throws(
+    () => validateSafeProjectFilePath({ requestedPath: '../segredo.md', projectRoot }),
+    error => error.statusCode === 403
+  );
+
+  assert.throws(
+    () => validateSafeProjectFilePath({ requestedPath: 'node_modules/lib/index.js', projectRoot }),
+    error => error.statusCode === 403
+  );
+
+  assert.throws(
+    () => validateSafeProjectFilePath({ requestedPath: '.env', projectRoot }),
+    error => error.statusCode === 403
+  );
+});
+
+test('readProjectFile lê arquivo pequeno e bloqueia arquivo acima do limite', async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), 'teste-local-code-llm-'));
+
+  try {
+    await writeFile(join(projectRoot, 'sample.md'), '# Exemplo\nConteúdo seguro.\n', 'utf8');
+    await writeFile(join(projectRoot, 'large.md'), 'x'.repeat(32), 'utf8');
+
+    const result = await readProjectFile({
+      path: 'sample.md',
+      projectRoot,
+      maxBytes: 1024,
+      allowedFileExtensions: ['.md']
+    });
+
+    assert.equal(result.path, 'sample.md');
+    assert.match(result.content, /Conteúdo seguro/);
+    assert.equal(result.maxFileReadBytes, 1024);
+
+    await assert.rejects(
+      () => readProjectFile({
+        path: 'large.md',
+        projectRoot,
+        maxBytes: 16,
+        allowedFileExtensions: ['.md']
+      }),
+      error => error.statusCode === 413
+    );
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
 test('GET /health responde estado local sem chamar Ollama', async () => {
   await withTestServer(async baseUrl => {
     const response = await fetch(`${baseUrl}/health`);
@@ -104,6 +176,7 @@ test('GET /health responde estado local sem chamar Ollama', async () => {
     assert.equal(typeof body.model, 'string');
     assert.equal(typeof body.queue.activeGenerations, 'number');
     assert.equal(typeof body.cache.entries, 'number');
+    assert.equal(typeof body.fileRead.maxFileReadBytes, 'number');
   });
 });
 
@@ -117,6 +190,7 @@ test('GET /api/status responde métricas da fila sem chamar Ollama', async () =>
     assert.equal(typeof body.queue.queuedGenerations, 'number');
     assert.equal(typeof body.queue.completedGenerations, 'number');
     assert.equal(typeof body.cache.hits, 'number');
+    assert.ok(Array.isArray(body.fileRead.allowedFileExtensions));
   });
 });
 
@@ -135,6 +209,21 @@ test('POST /api/generate valida task antes de chamar Ollama', async () => {
   });
 });
 
+test('POST /api/read-file valida path antes de ler arquivo', async () => {
+  await withTestServer(async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/read-file`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: '../package.json' })
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 403);
+    assert.match(body.error, /fora da pasta do projeto/);
+    assert.equal(typeof body.requestId, 'string');
+  });
+});
+
 test('rota desconhecida responde 404 com rotas disponíveis', async () => {
   await withTestServer(async baseUrl => {
     const response = await fetch(`${baseUrl}/api/desconhecida`);
@@ -142,6 +231,6 @@ test('rota desconhecida responde 404 com rotas disponíveis', async () => {
 
     assert.equal(response.status, 404);
     assert.match(body.error, /Rota não encontrada/);
-    assert.deepEqual(body.routes, ['GET /health', 'GET /api/status', 'POST /api/generate']);
+    assert.deepEqual(body.routes, ['GET /health', 'GET /api/status', 'POST /api/generate', 'POST /api/read-file']);
   });
 });

@@ -1,15 +1,18 @@
 import { createServer } from 'node:http';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createPromptCache } from './cache.js';
 import {
   CONFIG,
   LOG_LEVEL_PRIORITY,
   SENSITIVE_LOG_KEY_PATTERN
 } from './config.js';
 import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-limit.js';
+
+export { createPromptCache } from './cache.js';
 
 const {
   HOST,
@@ -63,47 +66,6 @@ export function createStructuredLogger({ level = 'info', sink = console.log } = 
 }
 
 const logger = createStructuredLogger({ level: LOG_LEVEL });
-
-export function createPromptCache({ enabled = true, maxEntries = 20 } = {}) {
-  const entries = new Map();
-  const metrics = { hits: 0, misses: 0, writes: 0, evictions: 0 };
-  function hashPrompt(prompt) {
-    return createHash('sha256').update(prompt).digest('hex');
-  }
-  function get(prompt) {
-    if (!enabled || maxEntries <= 0) {
-      metrics.misses += 1;
-      return null;
-    }
-    const key = hashPrompt(prompt);
-    if (!entries.has(key)) {
-      metrics.misses += 1;
-      return null;
-    }
-    const value = entries.get(key);
-    entries.delete(key);
-    entries.set(key, value);
-    metrics.hits += 1;
-    return { key, value };
-  }
-  function set(prompt, value) {
-    if (!enabled || maxEntries <= 0) return null;
-    const key = hashPrompt(prompt);
-    if (entries.has(key)) entries.delete(key);
-    entries.set(key, value);
-    metrics.writes += 1;
-    while (entries.size > maxEntries) {
-      const oldestKey = entries.keys().next().value;
-      entries.delete(oldestKey);
-      metrics.evictions += 1;
-    }
-    return key;
-  }
-  function getStatus() {
-    return { enabled, maxEntries, entries: entries.size, hits: metrics.hits, misses: metrics.misses, writes: metrics.writes, evictions: metrics.evictions };
-  }
-  return { get, set, getStatus };
-}
 
 export function createGenerationQueue({ maxQueueSize = 4, generationConcurrency = 1 } = {}) {
   const queue = [];

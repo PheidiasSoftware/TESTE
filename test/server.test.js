@@ -13,6 +13,10 @@ import {
   validateSafeProjectFilePath
 } from '../src/server.js';
 
+function toPosixPath(path) {
+  return path.replaceAll('\\', '/');
+}
+
 async function withTestServer(callback) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 
@@ -104,18 +108,18 @@ test('createPromptCache reutiliza resposta por hash e limita entradas', () => {
 });
 
 test('validateSafeProjectFilePath permite arquivo relativo com extensão aprovada', () => {
-  const projectRoot = '/tmp/projeto-teste';
+  const projectRoot = join(tmpdir(), 'projeto-teste');
   const result = validateSafeProjectFilePath({
     requestedPath: 'src/index.js',
     projectRoot,
     allowedFileExtensions: ['.js']
   });
 
-  assert.equal(result.relativePath, 'src/index.js');
+  assert.equal(toPosixPath(result.relativePath), 'src/index.js');
 });
 
 test('validateSafeProjectFilePath bloqueia travessia, dependências e .env', () => {
-  const projectRoot = '/tmp/projeto-teste';
+  const projectRoot = join(tmpdir(), 'projeto-teste');
 
   assert.throws(
     () => validateSafeProjectFilePath({ requestedPath: '../segredo.md', projectRoot }),

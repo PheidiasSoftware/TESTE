@@ -4,6 +4,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-limit.js';
+
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number.parseInt(process.env.PORT || '3131', 10);
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
@@ -11,10 +13,7 @@ const MODEL = process.env.MODEL || 'qwen2.5-coder:1.5b-instruct';
 const MAX_BODY_BYTES = Number.parseInt(process.env.MAX_BODY_BYTES || '65536', 10);
 const REQUEST_TIMEOUT_MS = Number.parseInt(process.env.REQUEST_TIMEOUT_MS || '120000', 10);
 const MAX_QUEUE_SIZE = Number.parseInt(process.env.MAX_QUEUE_SIZE || '4', 10);
-const GENERATION_CONCURRENCY = Math.max(
-  1,
-  Number.parseInt(process.env.GENERATION_CONCURRENCY || '1', 10)
-);
+const GENERATION_CONCURRENCY = Math.max(1, Number.parseInt(process.env.GENERATION_CONCURRENCY || '1', 10));
 const ENABLE_PROMPT_CACHE = process.env.ENABLE_PROMPT_CACHE !== 'false';
 const MAX_CACHE_ENTRIES = Math.max(0, Number.parseInt(process.env.MAX_CACHE_ENTRIES || '20', 10));
 const PROJECT_ROOT = resolve(process.env.PROJECT_ROOT || process.cwd());
@@ -22,99 +21,43 @@ const MAX_FILE_READ_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_FILE_
 const MAX_CONTEXT_FILES = Math.max(0, Number.parseInt(process.env.MAX_CONTEXT_FILES || '4', 10));
 const MAX_CONTEXT_BYTES = Math.max(1024, Number.parseInt(process.env.MAX_CONTEXT_BYTES || '12000', 10));
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
-const DEFAULT_ALLOWED_FILE_EXTENSIONS = [
-  '.css',
-  '.dart',
-  '.html',
-  '.js',
-  '.json',
-  '.md',
-  '.ps1',
-  '.sql',
-  '.ts',
-  '.txt',
-  '.yaml',
-  '.yml'
-];
-const LOG_LEVEL_PRIORITY = {
-  silent: 0,
-  error: 1,
-  warn: 2,
-  info: 3,
-  debug: 4
-};
+const ENABLE_RATE_LIMIT = process.env.ENABLE_RATE_LIMIT !== 'false';
+const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10));
+const RATE_LIMIT_MAX_REQUESTS = Math.max(1, Number.parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '30', 10));
+const RATE_LIMIT_MAX_CLIENTS = Math.max(1, Number.parseInt(process.env.RATE_LIMIT_MAX_CLIENTS || '500', 10));
+const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+const DEFAULT_ALLOWED_FILE_EXTENSIONS = ['.css', '.dart', '.html', '.js', '.json', '.md', '.ps1', '.sql', '.ts', '.txt', '.yaml', '.yml'];
+const LOG_LEVEL_PRIORITY = { silent: 0, error: 1, warn: 2, info: 3, debug: 4 };
 const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content)/i;
 
 function getAllowedFileExtensions() {
   const raw = process.env.ALLOWED_FILE_EXTENSIONS;
-  if (!raw) {
-    return DEFAULT_ALLOWED_FILE_EXTENSIONS;
-  }
-
-  const parsed = raw
-    .split(',')
-    .map(item => item.trim().toLowerCase())
-    .filter(Boolean)
-    .map(item => (item.startsWith('.') ? item : `.${item}`));
-
+  if (!raw) return DEFAULT_ALLOWED_FILE_EXTENSIONS;
+  const parsed = raw.split(',').map(item => item.trim().toLowerCase()).filter(Boolean).map(item => (item.startsWith('.') ? item : `.${item}`));
   return parsed.length > 0 ? parsed : DEFAULT_ALLOWED_FILE_EXTENSIONS;
 }
 
 const ALLOWED_FILE_EXTENSIONS = getAllowedFileExtensions();
 
 export function redactForLog(value, depth = 0) {
-  if (depth > 5) {
-    return '[max-depth]';
-  }
-
-  if (value === null || value === undefined) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    return value.length > 300 ? `${value.slice(0, 300)}...` : value;
-  }
-
-  if (typeof value !== 'object') {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.slice(0, 20).map(item => redactForLog(item, depth + 1));
-  }
-
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [
-      key,
-      SENSITIVE_LOG_KEY_PATTERN.test(key) ? '[redacted]' : redactForLog(item, depth + 1)
-    ])
-  );
+  if (depth > 5) return '[max-depth]';
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') return value.length > 300 ? `${value.slice(0, 300)}...` : value;
+  if (typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.slice(0, 20).map(item => redactForLog(item, depth + 1));
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, SENSITIVE_LOG_KEY_PATTERN.test(key) ? '[redacted]' : redactForLog(item, depth + 1)]));
 }
 
 export function createStructuredLogger({ level = 'info', sink = console.log } = {}) {
   const configuredPriority = LOG_LEVEL_PRIORITY[level] ?? LOG_LEVEL_PRIORITY.info;
-
   function shouldLog(eventLevel) {
     const eventPriority = LOG_LEVEL_PRIORITY[eventLevel] ?? LOG_LEVEL_PRIORITY.info;
     return configuredPriority > 0 && eventPriority <= configuredPriority;
   }
-
   function log(eventLevel, event, details = {}) {
-    if (!shouldLog(eventLevel)) {
-      return;
-    }
-
-    const entry = {
-      timestamp: new Date().toISOString(),
-      level: eventLevel,
-      service: 'teste-local-code-llm-backend',
-      event,
-      ...redactForLog(details)
-    };
-
-    sink(JSON.stringify(entry));
+    if (!shouldLog(eventLevel)) return;
+    sink(JSON.stringify({ timestamp: new Date().toISOString(), level: eventLevel, service: 'teste-local-code-llm-backend', event, ...redactForLog(details) }));
   }
-
   return {
     error: (event, details) => log('error', event, details),
     warn: (event, details) => log('warn', event, details),
@@ -127,156 +70,87 @@ const logger = createStructuredLogger({ level: LOG_LEVEL });
 
 export function createPromptCache({ enabled = true, maxEntries = 20 } = {}) {
   const entries = new Map();
-  const metrics = {
-    hits: 0,
-    misses: 0,
-    writes: 0,
-    evictions: 0
-  };
-
+  const metrics = { hits: 0, misses: 0, writes: 0, evictions: 0 };
   function hashPrompt(prompt) {
     return createHash('sha256').update(prompt).digest('hex');
   }
-
   function get(prompt) {
     if (!enabled || maxEntries <= 0) {
       metrics.misses += 1;
       return null;
     }
-
     const key = hashPrompt(prompt);
     if (!entries.has(key)) {
       metrics.misses += 1;
       return null;
     }
-
     const value = entries.get(key);
     entries.delete(key);
     entries.set(key, value);
     metrics.hits += 1;
-    return {
-      key,
-      value
-    };
+    return { key, value };
   }
-
   function set(prompt, value) {
-    if (!enabled || maxEntries <= 0) {
-      return null;
-    }
-
+    if (!enabled || maxEntries <= 0) return null;
     const key = hashPrompt(prompt);
-    if (entries.has(key)) {
-      entries.delete(key);
-    }
-
+    if (entries.has(key)) entries.delete(key);
     entries.set(key, value);
     metrics.writes += 1;
-
     while (entries.size > maxEntries) {
       const oldestKey = entries.keys().next().value;
       entries.delete(oldestKey);
       metrics.evictions += 1;
     }
-
     return key;
   }
-
   function getStatus() {
-    return {
-      enabled,
-      maxEntries,
-      entries: entries.size,
-      hits: metrics.hits,
-      misses: metrics.misses,
-      writes: metrics.writes,
-      evictions: metrics.evictions
-    };
+    return { enabled, maxEntries, entries: entries.size, hits: metrics.hits, misses: metrics.misses, writes: metrics.writes, evictions: metrics.evictions };
   }
-
-  return {
-    get,
-    set,
-    getStatus
-  };
+  return { get, set, getStatus };
 }
 
 export function createGenerationQueue({ maxQueueSize = 4, generationConcurrency = 1 } = {}) {
   const queue = [];
-  const metrics = {
-    activeGenerations: 0,
-    completedGenerations: 0,
-    failedGenerations: 0
-  };
-
+  const metrics = { activeGenerations: 0, completedGenerations: 0, failedGenerations: 0 };
   function getStatus() {
-    return {
-      activeGenerations: metrics.activeGenerations,
-      queuedGenerations: queue.length,
-      maxQueueSize,
-      generationConcurrency,
-      completedGenerations: metrics.completedGenerations,
-      failedGenerations: metrics.failedGenerations
-    };
+    return { activeGenerations: metrics.activeGenerations, queuedGenerations: queue.length, maxQueueSize, generationConcurrency, completedGenerations: metrics.completedGenerations, failedGenerations: metrics.failedGenerations };
   }
-
   function drain() {
     while (metrics.activeGenerations < generationConcurrency && queue.length > 0) {
       const item = queue.shift();
       metrics.activeGenerations += 1;
-
-      Promise.resolve()
-        .then(item.job)
-        .then(result => {
-          metrics.completedGenerations += 1;
-          item.resolve(result);
-        })
-        .catch(error => {
-          metrics.failedGenerations += 1;
-          item.reject(error);
-        })
-        .finally(() => {
-          metrics.activeGenerations -= 1;
-          drain();
-        });
+      Promise.resolve().then(item.job).then(result => {
+        metrics.completedGenerations += 1;
+        item.resolve(result);
+      }).catch(error => {
+        metrics.failedGenerations += 1;
+        item.reject(error);
+      }).finally(() => {
+        metrics.activeGenerations -= 1;
+        drain();
+      });
     }
   }
-
   function run(job) {
     return new Promise((resolve, reject) => {
       if (queue.length >= maxQueueSize) {
         reject(Object.assign(new Error('Fila de geração cheia. Tente novamente em alguns instantes.'), { statusCode: 429 }));
         return;
       }
-
       queue.push({ job, resolve, reject });
       drain();
     });
   }
-
-  return {
-    run,
-    getStatus
-  };
+  return { run, getStatus };
 }
 
-const generationQueue = createGenerationQueue({
-  maxQueueSize: MAX_QUEUE_SIZE,
-  generationConcurrency: GENERATION_CONCURRENCY
-});
+const generationQueue = createGenerationQueue({ maxQueueSize: MAX_QUEUE_SIZE, generationConcurrency: GENERATION_CONCURRENCY });
+const promptCache = createPromptCache({ enabled: ENABLE_PROMPT_CACHE, maxEntries: MAX_CACHE_ENTRIES });
+const rateLimiter = createFixedWindowRateLimiter({ enabled: ENABLE_RATE_LIMIT, windowMs: RATE_LIMIT_WINDOW_MS, maxRequests: RATE_LIMIT_MAX_REQUESTS, maxClients: RATE_LIMIT_MAX_CLIENTS });
 
-const promptCache = createPromptCache({
-  enabled: ENABLE_PROMPT_CACHE,
-  maxEntries: MAX_CACHE_ENTRIES
-});
-
-function sendJson(response, statusCode, payload) {
-  const body = JSON.stringify(payload, null, 2);
-  response.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store'
-  });
-  response.end(body);
+function sendJson(response, statusCode, payload, headers = {}) {
+  response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers });
+  response.end(JSON.stringify(payload, null, 2));
 }
 
 function sendServerEvent(response, event, payload) {
@@ -285,19 +159,13 @@ function sendServerEvent(response, event, payload) {
 }
 
 function openEventStream(response) {
-  response.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-store, no-transform',
-    connection: 'keep-alive',
-    'x-accel-buffering': 'no'
-  });
+  response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
 }
 
 function readJsonBody(request) {
   return new Promise((resolve, reject) => {
     let size = 0;
     let raw = '';
-
     request.on('data', chunk => {
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
@@ -307,20 +175,17 @@ function readJsonBody(request) {
       }
       raw += chunk;
     });
-
     request.on('end', () => {
       if (!raw.trim()) {
         resolve({});
         return;
       }
-
       try {
         resolve(JSON.parse(raw));
       } catch {
         reject(Object.assign(new Error('JSON inválido.'), { statusCode: 400 }));
       }
     });
-
     request.on('error', reject);
   });
 }
@@ -334,21 +199,30 @@ function getCacheStatus() {
 }
 
 function getFileReadStatus() {
-  return {
-    projectRoot: PROJECT_ROOT,
-    maxFileReadBytes: MAX_FILE_READ_BYTES,
-    maxContextFiles: MAX_CONTEXT_FILES,
-    maxContextBytes: MAX_CONTEXT_BYTES,
-    allowedFileExtensions: ALLOWED_FILE_EXTENSIONS
-  };
+  return { projectRoot: PROJECT_ROOT, maxFileReadBytes: MAX_FILE_READ_BYTES, maxContextFiles: MAX_CONTEXT_FILES, maxContextBytes: MAX_CONTEXT_BYTES, allowedFileExtensions: ALLOWED_FILE_EXTENSIONS };
 }
 
 function getLogStatus() {
-  return {
-    level: LOG_LEVEL,
-    format: 'json-lines',
-    redaction: 'sensitive-fields'
-  };
+  return { level: LOG_LEVEL, format: 'json-lines', redaction: 'sensitive-fields' };
+}
+
+function getRateLimitStatus() {
+  return { ...rateLimiter.getStatus(), trustProxy: TRUST_PROXY, appliedToRoutes: ['POST /api/generate', 'POST /api/generate-stream', 'POST /api/read-file'] };
+}
+
+function enforceRateLimit(request, response, { requestId, route }) {
+  const clientId = getClientIdFromRequest(request, { trustProxy: TRUST_PROXY });
+  const result = rateLimiter.check(clientId);
+  if (result.allowed) return true;
+  logger.warn('rate_limit.blocked', { requestId, route, retryAfterMs: result.retryAfterMs, limit: result.limit, remaining: result.remaining });
+  sendJson(response, 429, {
+    error: 'Muitas requisições em pouco tempo. Aguarde antes de tentar novamente.',
+    requestId,
+    retryAfterMs: result.retryAfterMs,
+    resetAt: result.resetAt,
+    rateLimit: getRateLimitStatus()
+  }, { 'retry-after': String(Math.ceil(result.retryAfterMs / 1000)) });
+  return false;
 }
 
 export function buildCodingPrompt({ task, language = 'general', context = '' }) {
@@ -363,195 +237,82 @@ export function buildCodingPrompt({ task, language = 'general', context = '' }) 
   ].join('\n\n');
 }
 
-export function validateSafeProjectFilePath({
-  requestedPath,
-  projectRoot = PROJECT_ROOT,
-  allowedFileExtensions = ALLOWED_FILE_EXTENSIONS
-} = {}) {
-  if (!requestedPath || typeof requestedPath !== 'string') {
-    throw Object.assign(new Error('Campo obrigatório: path precisa ser texto.'), { statusCode: 400 });
-  }
-
-  if (requestedPath.includes('\0')) {
-    throw Object.assign(new Error('Caminho inválido.'), { statusCode: 400 });
-  }
-
-  if (isAbsolute(requestedPath)) {
-    throw Object.assign(new Error('Use caminho relativo ao projeto, não caminho absoluto.'), { statusCode: 400 });
-  }
-
+export function validateSafeProjectFilePath({ requestedPath, projectRoot = PROJECT_ROOT, allowedFileExtensions = ALLOWED_FILE_EXTENSIONS } = {}) {
+  if (!requestedPath || typeof requestedPath !== 'string') throw Object.assign(new Error('Campo obrigatório: path precisa ser texto.'), { statusCode: 400 });
+  if (requestedPath.includes('\0')) throw Object.assign(new Error('Caminho inválido.'), { statusCode: 400 });
+  if (isAbsolute(requestedPath)) throw Object.assign(new Error('Use caminho relativo ao projeto, não caminho absoluto.'), { statusCode: 400 });
   const safeRoot = resolve(projectRoot);
   const safePath = resolve(safeRoot, requestedPath);
   const relativePath = relative(safeRoot, safePath);
-
-  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
-    throw Object.assign(new Error('Caminho fora da pasta do projeto não é permitido.'), { statusCode: 403 });
-  }
-
+  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) throw Object.assign(new Error('Caminho fora da pasta do projeto não é permitido.'), { statusCode: 403 });
   const normalizedSegments = relativePath.split(/[\\/]+/);
   const blockedSegments = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.cache']);
-  if (normalizedSegments.some(segment => blockedSegments.has(segment))) {
-    throw Object.assign(new Error('Leitura bloqueada para pastas internas, dependências ou artefatos gerados.'), { statusCode: 403 });
-  }
-
+  if (normalizedSegments.some(segment => blockedSegments.has(segment))) throw Object.assign(new Error('Leitura bloqueada para pastas internas, dependências ou artefatos gerados.'), { statusCode: 403 });
   const fileName = basename(relativePath).toLowerCase();
-  if (fileName === '.env' || fileName.startsWith('.env.')) {
-    throw Object.assign(new Error('Arquivos de ambiente reais não podem ser lidos pela API.'), { statusCode: 403 });
-  }
-
+  if (fileName === '.env' || fileName.startsWith('.env.')) throw Object.assign(new Error('Arquivos de ambiente reais não podem ser lidos pela API.'), { statusCode: 403 });
   const extension = extname(relativePath).toLowerCase();
-  if (!allowedFileExtensions.includes(extension)) {
-    throw Object.assign(new Error(`Extensão não permitida: ${extension || 'sem extensão'}.`), { statusCode: 415 });
-  }
-
-  return {
-    absolutePath: safePath,
-    relativePath
-  };
+  if (!allowedFileExtensions.includes(extension)) throw Object.assign(new Error(`Extensão não permitida: ${extension || 'sem extensão'}.`), { statusCode: 415 });
+  return { absolutePath: safePath, relativePath };
 }
 
-export async function readProjectFile({
-  path,
-  projectRoot = PROJECT_ROOT,
-  maxBytes = MAX_FILE_READ_BYTES,
-  allowedFileExtensions = ALLOWED_FILE_EXTENSIONS
-} = {}) {
-  const safeFile = validateSafeProjectFilePath({
-    requestedPath: path,
-    projectRoot,
-    allowedFileExtensions
-  });
-
+export async function readProjectFile({ path, projectRoot = PROJECT_ROOT, maxBytes = MAX_FILE_READ_BYTES, allowedFileExtensions = ALLOWED_FILE_EXTENSIONS } = {}) {
+  const safeFile = validateSafeProjectFilePath({ requestedPath: path, projectRoot, allowedFileExtensions });
   const fileStat = await stat(safeFile.absolutePath).catch(error => {
-    if (error?.code === 'ENOENT') {
-      throw Object.assign(new Error('Arquivo não encontrado.'), { statusCode: 404 });
-    }
+    if (error?.code === 'ENOENT') throw Object.assign(new Error('Arquivo não encontrado.'), { statusCode: 404 });
     throw error;
   });
-
-  if (!fileStat.isFile()) {
-    throw Object.assign(new Error('O caminho informado não é um arquivo.'), { statusCode: 400 });
-  }
-
-  if (fileStat.size > maxBytes) {
-    throw Object.assign(new Error(`Arquivo excede o limite de leitura de ${maxBytes} bytes.`), { statusCode: 413 });
-  }
-
-  const content = await readFile(safeFile.absolutePath, 'utf8');
-
-  return {
-    path: safeFile.relativePath,
-    sizeBytes: fileStat.size,
-    maxFileReadBytes: maxBytes,
-    content
-  };
+  if (!fileStat.isFile()) throw Object.assign(new Error('O caminho informado não é um arquivo.'), { statusCode: 400 });
+  if (fileStat.size > maxBytes) throw Object.assign(new Error(`Arquivo excede o limite de leitura de ${maxBytes} bytes.`), { statusCode: 413 });
+  return { path: safeFile.relativePath, sizeBytes: fileStat.size, maxFileReadBytes: maxBytes, content: await readFile(safeFile.absolutePath, 'utf8') };
 }
 
-export async function buildContextFromFiles({
-  context = '',
-  contextFiles = [],
-  projectRoot = PROJECT_ROOT,
-  maxFiles = MAX_CONTEXT_FILES,
-  maxContextBytes = MAX_CONTEXT_BYTES,
-  maxFileReadBytes = MAX_FILE_READ_BYTES,
-  allowedFileExtensions = ALLOWED_FILE_EXTENSIONS
-} = {}) {
+export async function buildContextFromFiles({ context = '', contextFiles = [], projectRoot = PROJECT_ROOT, maxFiles = MAX_CONTEXT_FILES, maxContextBytes = MAX_CONTEXT_BYTES, maxFileReadBytes = MAX_FILE_READ_BYTES, allowedFileExtensions = ALLOWED_FILE_EXTENSIONS } = {}) {
   if (contextFiles === undefined || contextFiles === null || contextFiles.length === 0) {
-    return {
-      context,
-      files: [],
-      totalBytes: Buffer.byteLength(context, 'utf8'),
-      truncated: false
-    };
+    return { context, files: [], totalBytes: Buffer.byteLength(context, 'utf8'), truncated: false };
   }
-
-  if (!Array.isArray(contextFiles)) {
-    throw Object.assign(new Error('contextFiles precisa ser uma lista de caminhos relativos.'), { statusCode: 400 });
-  }
-
-  if (contextFiles.length > maxFiles) {
-    throw Object.assign(new Error(`contextFiles aceita no máximo ${maxFiles} arquivo(s).`), { statusCode: 400 });
-  }
-
+  if (!Array.isArray(contextFiles)) throw Object.assign(new Error('contextFiles precisa ser uma lista de caminhos relativos.'), { statusCode: 400 });
+  if (contextFiles.length > maxFiles) throw Object.assign(new Error(`contextFiles aceita no máximo ${maxFiles} arquivo(s).`), { statusCode: 400 });
   const safeContext = typeof context === 'string' ? context : '';
   const parts = safeContext ? [safeContext.slice(0, maxContextBytes)] : [];
   const files = [];
   let totalBytes = Buffer.byteLength(parts.join('\n'), 'utf8');
   let truncated = false;
-
   for (const item of contextFiles) {
-    if (typeof item !== 'string') {
-      throw Object.assign(new Error('Todos os itens de contextFiles precisam ser texto.'), { statusCode: 400 });
-    }
-
-    const file = await readProjectFile({
-      path: item.slice(0, 500),
-      projectRoot,
-      maxBytes: Math.min(maxFileReadBytes, maxContextBytes),
-      allowedFileExtensions
-    });
-
+    if (typeof item !== 'string') throw Object.assign(new Error('Todos os itens de contextFiles precisam ser texto.'), { statusCode: 400 });
+    const file = await readProjectFile({ path: item.slice(0, 500), projectRoot, maxBytes: Math.min(maxFileReadBytes, maxContextBytes), allowedFileExtensions });
     const header = `\n\n--- arquivo: ${file.path} (${file.sizeBytes} bytes) ---\n`;
     const availableBytes = maxContextBytes - totalBytes - Buffer.byteLength(header, 'utf8');
-
     if (availableBytes <= 0) {
       truncated = true;
       break;
     }
-
     let fileContent = file.content;
     if (Buffer.byteLength(fileContent, 'utf8') > availableBytes) {
       fileContent = Buffer.from(fileContent, 'utf8').subarray(0, availableBytes).toString('utf8');
       truncated = true;
     }
-
     parts.push(`${header}${fileContent}`);
     totalBytes = Buffer.byteLength(parts.join('\n'), 'utf8');
-    files.push({
-      path: file.path,
-      sizeBytes: file.sizeBytes,
-      includedBytes: Buffer.byteLength(fileContent, 'utf8')
-    });
-
+    files.push({ path: file.path, sizeBytes: file.sizeBytes, includedBytes: Buffer.byteLength(fileContent, 'utf8') });
     if (totalBytes >= maxContextBytes) {
       truncated = true;
       break;
     }
   }
-
-  return {
-    context: parts.join('\n'),
-    files,
-    totalBytes,
-    truncated
-  };
+  return { context: parts.join('\n'), files, totalBytes, truncated };
 }
 
 async function callOllamaGenerate(prompt, signal) {
   const response = await fetch(`${OLLAMA_URL}/api/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
-      prompt,
-      stream: false,
-      options: {
-        num_ctx: 2048,
-        num_predict: 512,
-        temperature: 0.2
-      }
-    }),
+    body: JSON.stringify({ model: MODEL, prompt, stream: false, options: { num_ctx: 2048, num_predict: 512, temperature: 0.2 } }),
     signal
   });
-
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    throw Object.assign(new Error('Falha ao chamar Ollama.'), {
-      statusCode: 502,
-      detail: detail.slice(0, 500)
-    });
+    throw Object.assign(new Error('Falha ao chamar Ollama.'), { statusCode: 502, detail: detail.slice(0, 500) });
   }
-
   return response.json();
 }
 
@@ -559,215 +320,84 @@ async function callOllamaGenerateStream(prompt, { signal, onToken } = {}) {
   const response = await fetch(`${OLLAMA_URL}/api/generate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
-      prompt,
-      stream: true,
-      options: {
-        num_ctx: 2048,
-        num_predict: 512,
-        temperature: 0.2
-      }
-    }),
+    body: JSON.stringify({ model: MODEL, prompt, stream: true, options: { num_ctx: 2048, num_predict: 512, temperature: 0.2 } }),
     signal
   });
-
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    throw Object.assign(new Error('Falha ao chamar Ollama em streaming.'), {
-      statusCode: 502,
-      detail: detail.slice(0, 500)
-    });
+    throw Object.assign(new Error('Falha ao chamar Ollama em streaming.'), { statusCode: 502, detail: detail.slice(0, 500) });
   }
-
-  if (!response.body) {
-    throw Object.assign(new Error('Runtime local não retornou corpo de streaming.'), { statusCode: 502 });
-  }
-
+  if (!response.body) throw Object.assign(new Error('Runtime local não retornou corpo de streaming.'), { statusCode: 502 });
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let fullResponse = '';
-  let done = false;
-
-  while (!done) {
+  while (true) {
     const chunk = await reader.read();
-    done = chunk.done;
-    buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !done });
-
+    buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
-
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-
+      if (!trimmed) continue;
       let parsed;
       try {
         parsed = JSON.parse(trimmed);
       } catch {
         continue;
       }
-
       if (parsed.response) {
         fullResponse += parsed.response;
         onToken?.(parsed.response, parsed);
       }
-
-      if (parsed.done) {
-        return {
-          response: fullResponse,
-          done: true,
-          total_duration: parsed.total_duration
-        };
-      }
+      if (parsed.done) return { response: fullResponse, done: true, total_duration: parsed.total_duration };
     }
+    if (chunk.done) break;
   }
-
-  return {
-    response: fullResponse,
-    done: false
-  };
+  return { response: fullResponse, done: false };
 }
 
 async function buildGenerateRequestPayload(request, requestId) {
   const body = await readJsonBody(request);
-
-  if (!body.task || typeof body.task !== 'string') {
-    throw Object.assign(new Error('Campo obrigatório: task precisa ser texto.'), {
-      statusCode: 400,
-      requestId
-    });
-  }
-
-  const contextBundle = await buildContextFromFiles({
-    context: typeof body.context === 'string' ? body.context.slice(0, MAX_CONTEXT_BYTES) : '',
-    contextFiles: body.contextFiles
-  });
-
-  const prompt = buildCodingPrompt({
-    task: body.task.slice(0, 8000),
-    language: typeof body.language === 'string' ? body.language.slice(0, 80) : 'general',
-    context: contextBundle.context
-  });
-
-  return {
-    prompt,
-    contextBundle
-  };
+  if (!body.task || typeof body.task !== 'string') throw Object.assign(new Error('Campo obrigatório: task precisa ser texto.'), { statusCode: 400, requestId });
+  const contextBundle = await buildContextFromFiles({ context: typeof body.context === 'string' ? body.context.slice(0, MAX_CONTEXT_BYTES) : '', contextFiles: body.contextFiles });
+  const prompt = buildCodingPrompt({ task: body.task.slice(0, 8000), language: typeof body.language === 'string' ? body.language.slice(0, 80) : 'general', context: contextBundle.context });
+  return { prompt, contextBundle };
 }
 
 async function handleGenerate(request, response) {
   const requestId = randomUUID();
   const startedAt = Date.now();
+  logger.info('generate.request.received', { requestId, route: 'POST /api/generate', method: request.method, contentLength: request.headers['content-length'] });
+  if (!enforceRateLimit(request, response, { requestId, route: 'POST /api/generate' })) return;
   let payload;
-
-  logger.info('generate.request.received', {
-    requestId,
-    route: 'POST /api/generate',
-    method: request.method,
-    contentLength: request.headers['content-length']
-  });
-
   try {
     payload = await buildGenerateRequestPayload(request, requestId);
   } catch (error) {
-    logger.warn('generate.request.invalid', {
-      requestId,
-      statusCode: error.statusCode || 500,
-      error: error.message
-    });
-    sendJson(response, error.statusCode || 500, {
-      error: error.message || 'Erro ao montar requisição.',
-      requestId,
-      fileRead: error.statusCode === 400 ? undefined : getFileReadStatus()
-    });
+    logger.warn('generate.request.invalid', { requestId, statusCode: error.statusCode || 500, error: error.message });
+    sendJson(response, error.statusCode || 500, { error: error.message || 'Erro ao montar requisição.', requestId, fileRead: error.statusCode === 400 ? undefined : getFileReadStatus() });
     return;
   }
-
   const { prompt, contextBundle } = payload;
   const cached = promptCache.get(prompt);
   if (cached) {
-    logger.info('generate.cache.hit', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      contextFilesCount: contextBundle.files.length,
-      contextTruncated: contextBundle.truncated,
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
-    sendJson(response, 200, {
-      requestId,
-      model: MODEL,
-      durationMs: Date.now() - startedAt,
-      queueWaitMs: 0,
-      cached: true,
-      cacheKey: cached.key,
-      contextFiles: contextBundle.files,
-      contextTruncated: contextBundle.truncated,
-      response: cached.value.response || '',
-      done: Boolean(cached.value.done),
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
+    logger.info('generate.cache.hit', { requestId, durationMs: Date.now() - startedAt, contextFilesCount: contextBundle.files.length, contextTruncated: contextBundle.truncated, queue: getQueueStatus(), cache: getCacheStatus() });
+    sendJson(response, 200, { requestId, model: MODEL, durationMs: Date.now() - startedAt, queueWaitMs: 0, cached: true, cacheKey: cached.key, contextFiles: contextBundle.files, contextTruncated: contextBundle.truncated, response: cached.value.response || '', done: Boolean(cached.value.done), queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
     return;
   }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
   try {
     const queuedAt = Date.now();
     const result = await generationQueue.run(() => callOllamaGenerate(prompt, controller.signal));
-    const cacheKey = promptCache.set(prompt, {
-      response: result.response || '',
-      done: Boolean(result.done)
-    });
-
+    const cacheKey = promptCache.set(prompt, { response: result.response || '', done: Boolean(result.done) });
     const durationMs = Date.now() - startedAt;
-    logger.info('generate.request.completed', {
-      requestId,
-      durationMs,
-      cached: false,
-      contextFilesCount: contextBundle.files.length,
-      contextTruncated: contextBundle.truncated,
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
-
-    sendJson(response, 200, {
-      requestId,
-      model: MODEL,
-      durationMs,
-      queueWaitMs: Date.now() - queuedAt - (result.total_duration ? Math.round(result.total_duration / 1_000_000) : 0),
-      cached: false,
-      cacheKey,
-      contextFiles: contextBundle.files,
-      contextTruncated: contextBundle.truncated,
-      response: result.response || '',
-      done: Boolean(result.done),
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
+    logger.info('generate.request.completed', { requestId, durationMs, cached: false, contextFilesCount: contextBundle.files.length, contextTruncated: contextBundle.truncated, queue: getQueueStatus(), cache: getCacheStatus() });
+    sendJson(response, 200, { requestId, model: MODEL, durationMs, queueWaitMs: Date.now() - queuedAt - (result.total_duration ? Math.round(result.total_duration / 1_000_000) : 0), cached: false, cacheKey, contextFiles: contextBundle.files, contextTruncated: contextBundle.truncated, response: result.response || '', done: Boolean(result.done), queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
   } catch (error) {
     const aborted = error?.name === 'AbortError';
-    logger.error('generate.request.failed', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      statusCode: aborted ? 504 : error.statusCode || 500,
-      error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
-    sendJson(response, aborted ? 504 : error.statusCode || 500, {
-      error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
-      detail: error.detail,
-      requestId,
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
+    logger.error('generate.request.failed', { requestId, durationMs: Date.now() - startedAt, statusCode: aborted ? 504 : error.statusCode || 500, error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, queue: getQueueStatus(), cache: getCacheStatus() });
+    sendJson(response, aborted ? 504 : error.statusCode || 500, { error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, detail: error.detail, requestId, queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
   } finally {
     clearTimeout(timeout);
   }
@@ -776,120 +406,39 @@ async function handleGenerate(request, response) {
 async function handleGenerateStream(request, response) {
   const requestId = randomUUID();
   const startedAt = Date.now();
+  logger.info('generate_stream.request.received', { requestId, route: 'POST /api/generate-stream', method: request.method, contentLength: request.headers['content-length'] });
+  if (!enforceRateLimit(request, response, { requestId, route: 'POST /api/generate-stream' })) return;
   let payload;
-
-  logger.info('generate_stream.request.received', {
-    requestId,
-    route: 'POST /api/generate-stream',
-    method: request.method,
-    contentLength: request.headers['content-length']
-  });
-
   try {
     payload = await buildGenerateRequestPayload(request, requestId);
   } catch (error) {
-    logger.warn('generate_stream.request.invalid', {
-      requestId,
-      statusCode: error.statusCode || 500,
-      error: error.message
-    });
-    sendJson(response, error.statusCode || 500, {
-      error: error.message || 'Erro ao montar requisição de streaming.',
-      requestId,
-      fileRead: error.statusCode === 400 ? undefined : getFileReadStatus()
-    });
+    logger.warn('generate_stream.request.invalid', { requestId, statusCode: error.statusCode || 500, error: error.message });
+    sendJson(response, error.statusCode || 500, { error: error.message || 'Erro ao montar requisição de streaming.', requestId, fileRead: error.statusCode === 400 ? undefined : getFileReadStatus() });
     return;
   }
-
   const { prompt, contextBundle } = payload;
   const cached = promptCache.get(prompt);
-
   openEventStream(response);
-  sendServerEvent(response, 'metadata', {
-    requestId,
-    model: MODEL,
-    cached: Boolean(cached),
-    contextFiles: contextBundle.files,
-    contextTruncated: contextBundle.truncated,
-    queue: getQueueStatus(),
-    cache: getCacheStatus()
-  });
-
+  sendServerEvent(response, 'metadata', { requestId, model: MODEL, cached: Boolean(cached), contextFiles: contextBundle.files, contextTruncated: contextBundle.truncated, queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
   if (cached) {
     const cachedResponse = cached.value.response || '';
-    if (cachedResponse) {
-      sendServerEvent(response, 'token', { requestId, token: cachedResponse });
-    }
-    logger.info('generate_stream.cache.hit', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      contextFilesCount: contextBundle.files.length,
-      contextTruncated: contextBundle.truncated,
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
-    sendServerEvent(response, 'done', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      cached: true,
-      done: Boolean(cached.value.done),
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
+    if (cachedResponse) sendServerEvent(response, 'token', { requestId, token: cachedResponse });
+    logger.info('generate_stream.cache.hit', { requestId, durationMs: Date.now() - startedAt, contextFilesCount: contextBundle.files.length, contextTruncated: contextBundle.truncated, queue: getQueueStatus(), cache: getCacheStatus() });
+    sendServerEvent(response, 'done', { requestId, durationMs: Date.now() - startedAt, cached: true, done: Boolean(cached.value.done), queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
     response.end();
     return;
   }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
   try {
-    const result = await generationQueue.run(() => callOllamaGenerateStream(prompt, {
-      signal: controller.signal,
-      onToken: token => sendServerEvent(response, 'token', { requestId, token })
-    }));
-
-    const cacheKey = promptCache.set(prompt, {
-      response: result.response || '',
-      done: Boolean(result.done)
-    });
-
-    logger.info('generate_stream.request.completed', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      cached: false,
-      contextFilesCount: contextBundle.files.length,
-      contextTruncated: contextBundle.truncated,
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
-
-    sendServerEvent(response, 'done', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      cached: false,
-      cacheKey,
-      done: Boolean(result.done),
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
+    const result = await generationQueue.run(() => callOllamaGenerateStream(prompt, { signal: controller.signal, onToken: token => sendServerEvent(response, 'token', { requestId, token }) }));
+    const cacheKey = promptCache.set(prompt, { response: result.response || '', done: Boolean(result.done) });
+    logger.info('generate_stream.request.completed', { requestId, durationMs: Date.now() - startedAt, cached: false, contextFilesCount: contextBundle.files.length, contextTruncated: contextBundle.truncated, queue: getQueueStatus(), cache: getCacheStatus() });
+    sendServerEvent(response, 'done', { requestId, durationMs: Date.now() - startedAt, cached: false, cacheKey, done: Boolean(result.done), queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
   } catch (error) {
     const aborted = error?.name === 'AbortError';
-    logger.error('generate_stream.request.failed', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      statusCode: aborted ? 504 : error.statusCode || 500,
-      error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
-    sendServerEvent(response, 'error', {
-      requestId,
-      error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message,
-      detail: error.detail,
-      queue: getQueueStatus(),
-      cache: getCacheStatus()
-    });
+    logger.error('generate_stream.request.failed', { requestId, durationMs: Date.now() - startedAt, statusCode: aborted ? 504 : error.statusCode || 500, error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, queue: getQueueStatus(), cache: getCacheStatus() });
+    sendServerEvent(response, 'error', { requestId, error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, detail: error.detail, queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
   } finally {
     clearTimeout(timeout);
     response.end();
@@ -899,135 +448,54 @@ async function handleGenerateStream(request, response) {
 async function handleReadFile(request, response) {
   const requestId = randomUUID();
   const startedAt = Date.now();
-  const body = await readJsonBody(request);
-
-  logger.info('read_file.request.received', {
-    requestId,
-    route: 'POST /api/read-file',
-    method: request.method,
-    contentLength: request.headers['content-length']
-  });
-
+  logger.info('read_file.request.received', { requestId, route: 'POST /api/read-file', method: request.method, contentLength: request.headers['content-length'] });
+  if (!enforceRateLimit(request, response, { requestId, route: 'POST /api/read-file' })) return;
   try {
-    const result = await readProjectFile({
-      path: typeof body.path === 'string' ? body.path.slice(0, 500) : body.path
-    });
-
-    logger.info('read_file.request.completed', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      path: result.path,
-      sizeBytes: result.sizeBytes
-    });
-
-    sendJson(response, 200, {
-      requestId,
-      ...result
-    });
+    const body = await readJsonBody(request);
+    const result = await readProjectFile({ path: typeof body.path === 'string' ? body.path.slice(0, 500) : body.path });
+    logger.info('read_file.request.completed', { requestId, durationMs: Date.now() - startedAt, path: result.path, sizeBytes: result.sizeBytes });
+    sendJson(response, 200, { requestId, ...result, rateLimit: getRateLimitStatus() });
   } catch (error) {
-    logger.warn('read_file.request.failed', {
-      requestId,
-      durationMs: Date.now() - startedAt,
-      statusCode: error.statusCode || 500,
-      error: error.message
-    });
-    sendJson(response, error.statusCode || 500, {
-      error: error.message || 'Erro ao ler arquivo.',
-      requestId,
-      fileRead: getFileReadStatus()
-    });
+    logger.warn('read_file.request.failed', { requestId, durationMs: Date.now() - startedAt, statusCode: error.statusCode || 500, error: error.message });
+    sendJson(response, error.statusCode || 500, { error: error.message || 'Erro ao ler arquivo.', requestId, fileRead: getFileReadStatus(), rateLimit: getRateLimitStatus() });
   }
 }
 
-const ROUTES = [
-  'GET /health',
-  'GET /api/status',
-  'POST /api/generate',
-  'POST /api/generate-stream',
-  'POST /api/read-file'
-];
+const ROUTES = ['GET /health', 'GET /api/status', 'POST /api/generate', 'POST /api/generate-stream', 'POST /api/read-file'];
 
 export const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url || '/', `http://${request.headers.host || HOST}`);
-
     if (request.method === 'GET' && url.pathname === '/health') {
-      sendJson(response, 200, {
-        status: 'ok',
-        service: 'teste-local-code-llm-backend',
-        model: MODEL,
-        ollamaUrl: OLLAMA_URL,
-        queue: getQueueStatus(),
-        cache: getCacheStatus(),
-        fileRead: getFileReadStatus(),
-        logging: getLogStatus(),
-        routes: ROUTES
-      });
+      sendJson(response, 200, { status: 'ok', service: 'teste-local-code-llm-backend', model: MODEL, ollamaUrl: OLLAMA_URL, queue: getQueueStatus(), cache: getCacheStatus(), fileRead: getFileReadStatus(), logging: getLogStatus(), rateLimit: getRateLimitStatus(), routes: ROUTES });
       return;
     }
-
     if (request.method === 'GET' && url.pathname === '/api/status') {
-      sendJson(response, 200, {
-        service: 'teste-local-code-llm-backend',
-        model: MODEL,
-        ollamaUrl: OLLAMA_URL,
-        queue: getQueueStatus(),
-        cache: getCacheStatus(),
-        fileRead: getFileReadStatus(),
-        logging: getLogStatus(),
-        routes: ROUTES
-      });
+      sendJson(response, 200, { service: 'teste-local-code-llm-backend', model: MODEL, ollamaUrl: OLLAMA_URL, queue: getQueueStatus(), cache: getCacheStatus(), fileRead: getFileReadStatus(), logging: getLogStatus(), rateLimit: getRateLimitStatus(), routes: ROUTES });
       return;
     }
-
     if (request.method === 'POST' && url.pathname === '/api/generate') {
       await handleGenerate(request, response);
       return;
     }
-
     if (request.method === 'POST' && url.pathname === '/api/generate-stream') {
       await handleGenerateStream(request, response);
       return;
     }
-
     if (request.method === 'POST' && url.pathname === '/api/read-file') {
       await handleReadFile(request, response);
       return;
     }
-
-    sendJson(response, 404, {
-      error: 'Rota não encontrada.',
-      routes: ROUTES
-    });
+    sendJson(response, 404, { error: 'Rota não encontrada.', routes: ROUTES });
   } catch (error) {
-    logger.error('http.request.failed', {
-      statusCode: error.statusCode || 500,
-      error: error.message
-    });
-    sendJson(response, error.statusCode || 500, {
-      error: error.message || 'Erro interno.'
-    });
+    logger.error('http.request.failed', { statusCode: error.statusCode || 500, error: error.message });
+    sendJson(response, error.statusCode || 500, { error: error.message || 'Erro interno.' });
   }
 });
 
 function startServer() {
   server.listen(PORT, HOST, () => {
-    logger.info('server.started', {
-      host: HOST,
-      port: PORT,
-      model: MODEL,
-      ollamaUrl: OLLAMA_URL,
-      generationConcurrency: GENERATION_CONCURRENCY,
-      maxQueueSize: MAX_QUEUE_SIZE,
-      promptCacheEnabled: ENABLE_PROMPT_CACHE,
-      maxCacheEntries: MAX_CACHE_ENTRIES,
-      projectRoot: PROJECT_ROOT,
-      maxFileReadBytes: MAX_FILE_READ_BYTES,
-      maxContextFiles: MAX_CONTEXT_FILES,
-      maxContextBytes: MAX_CONTEXT_BYTES,
-      logLevel: LOG_LEVEL
-    });
-
+    logger.info('server.started', { host: HOST, port: PORT, model: MODEL, ollamaUrl: OLLAMA_URL, generationConcurrency: GENERATION_CONCURRENCY, maxQueueSize: MAX_QUEUE_SIZE, promptCacheEnabled: ENABLE_PROMPT_CACHE, maxCacheEntries: MAX_CACHE_ENTRIES, projectRoot: PROJECT_ROOT, maxFileReadBytes: MAX_FILE_READ_BYTES, maxContextFiles: MAX_CONTEXT_FILES, maxContextBytes: MAX_CONTEXT_BYTES, logLevel: LOG_LEVEL, rateLimit: getRateLimitStatus() });
     console.log(`Backend local ouvindo em http://${HOST}:${PORT}`);
     console.log(`Modelo configurado: ${MODEL}`);
     console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
@@ -1035,12 +503,10 @@ function startServer() {
     console.log(`Leitura de arquivos: raiz=${PROJECT_ROOT}, limite=${MAX_FILE_READ_BYTES} bytes`);
     console.log(`Contexto por arquivos: máximo=${MAX_CONTEXT_FILES} arquivos, limite=${MAX_CONTEXT_BYTES} bytes`);
     console.log(`Logs estruturados: nível=${LOG_LEVEL}, formato=json-lines`);
+    console.log(`Rate limit: ${ENABLE_RATE_LIMIT ? 'ativo' : 'desativado'}, limite=${RATE_LIMIT_MAX_REQUESTS}/${RATE_LIMIT_WINDOW_MS}ms`);
     console.log('Streaming: POST /api/generate-stream com Server-Sent Events');
   });
 }
 
 const isEntryPoint = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
-
-if (isEntryPoint) {
-  startServer();
-}
+if (isEntryPoint) startServer();

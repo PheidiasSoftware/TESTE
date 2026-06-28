@@ -97,6 +97,13 @@ O workflow roda em:
 
 A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com tarefa válida. Ela cobre somente os testes locais que não dependem de GPU nem de runtime externo.
 
+## Guias técnicos
+
+- [Streaming SSE](docs/streaming.md)
+- [Rate limit local](docs/rate-limit.md)
+- [Seleção de modelos leves](docs/model-selection.md)
+- [Integração de clientes locais](docs/client-integration.md)
+
 ## Variáveis de ambiente
 
 | Variável | Padrão | Uso |
@@ -117,6 +124,11 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 | `MAX_CONTEXT_BYTES` | `12000` | Tamanho máximo do contexto final montado para o prompt |
 | `ALLOWED_FILE_EXTENSIONS` | lista segura | Extensões permitidas separadas por vírgula |
 | `LOG_LEVEL` | `info` | Nível dos logs estruturados: `silent`, `error`, `warn`, `info` ou `debug` |
+| `ENABLE_RATE_LIMIT` | `true` | Ativa rate limit local nas rotas pesadas |
+| `RATE_LIMIT_WINDOW_MS` | `60000` | Janela do rate limit em milissegundos |
+| `RATE_LIMIT_MAX_REQUESTS` | `30` | Máximo de requisições por cliente em cada janela |
+| `RATE_LIMIT_MAX_CLIENTS` | `500` | Máximo de clientes rastreados em memória |
+| `TRUST_PROXY` | `false` | Usa `X-Forwarded-For` somente quando o backend estiver atrás de proxy confiável |
 
 Extensões permitidas por padrão:
 
@@ -249,6 +261,8 @@ MAX_FILE_READ_BYTES=32768
 MAX_CONTEXT_FILES=4
 MAX_CONTEXT_BYTES=12000
 LOG_LEVEL=info
+ENABLE_RATE_LIMIT=true
+RATE_LIMIT_MAX_REQUESTS=30
 ```
 
 Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_FILE_READ_BYTES`, reduza `MAX_CONTEXT_FILES`, reduza `MAX_CONTEXT_BYTES`, use `LOG_LEVEL=warn` ou desative cache com `ENABLE_PROMPT_CACHE=false`.
@@ -264,6 +278,7 @@ Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_
 - Leitura segura limitada a arquivos textuais pequenos dentro do projeto.
 - Contexto por arquivos integrado ao `/api/generate` com limite de quantidade e bytes.
 - Streaming em rota separada via SSE para melhorar experiência sem alterar o endpoint JSON.
+- Rate limit em memória nas rotas pesadas para reduzir abuso acidental e travamentos.
 - Logs estruturados em JSON Lines com redaction de campos sensíveis e sem persistência em arquivo.
 - Script Windows em PowerShell para iniciar com padrões conservadores e verificar Ollama.
 - CI leve com GitHub Actions roda apenas `npm test` em Node.js 20, sem instalar Ollama.
@@ -275,5 +290,5 @@ Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_
 
 - Testar `npm run start:windows` em Windows real com Ollama instalado.
 - Testar `POST /api/generate-stream` com Ollama real e modelo `qwen2.5-coder:1.5b-instruct`.
-- Documentar integração futura com plugin/extensão VS Code ou cliente Flutter.
+- Validar integração inicial com uma extensão VS Code ou cliente Flutter usando [`docs/client-integration.md`](docs/client-integration.md).
 - Considerar separação gradual de `src/server.js` em módulos menores quando o arquivo crescer mais.

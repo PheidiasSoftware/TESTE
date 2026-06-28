@@ -29,11 +29,12 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves e integração de clientes.
 - README principal com links para arquitetura, contrato da API, status do MVP, streaming, rate limit, seleção de modelos e integração de clientes.
 - Helpers de cliente Ollama em `src/ollama.js` para montagem de payload, parse de JSONL streaming, chamada não-streaming e leitura de stream, com testes isolados por `fetchImpl` fake.
+- `src/server.js` integrado ao cliente Ollama de `src/ollama.js`, removendo duplicação direta de payload/parsing de streaming no servidor.
 
 ## Critérios parcialmente atendidos
 
-- Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js`, `src/ollama.js` e `src/cache.js`, mas `src/server.js` ainda concentra parte da lógica principal.
-- Cliente Ollama: `src/ollama.js` já possui helpers testáveis para payload, parsing, cliente não-streaming e leitura de streaming; a integração completa no servidor deve ser feita em passo pequeno e validado.
+- Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js`, `src/ollama.js` e `src/cache.js`, mas `src/server.js` ainda concentra roteamento, fila, leitura segura e helpers HTTP locais.
+- Cliente Ollama: `src/ollama.js` está integrado ao servidor; falta apenas validação final por `npm test`/CI após a alteração.
 - Cache: `src/cache.js` está integrado ao servidor e mantém testes próprios; manter este item sob observação apenas para validação de CI/local após mudanças no `src/server.js`.
 
 ## Não faz parte do MVP backend
@@ -55,7 +56,7 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 
 ## Próximas tarefas seguras recomendadas
 
-1. Integrar `src/ollama.js` em `src/server.js` em commit pequeno, substituindo apenas montagem de payload e parsing de linha de streaming.
+1. Validar CI ou executar `npm test` localmente após integração de `src/ollama.js`.
 2. Integrar `src/http.js` em `src/server.js` em commit pequeno, preservando `MAX_BODY_BYTES`.
 3. Extrair fila para `src/generation-queue.js` com testes próprios.
 4. Extrair leitura segura para `src/project-files.js` com testes próprios.

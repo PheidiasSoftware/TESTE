@@ -1,0 +1,47 @@
+name: Node.js tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: npm test on Node.js 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run tests
+        env:
+          HOST: 127.0.0.1
+          PORT: 3131
+          OLLAMA_URL: http://127.0.0.1:11434
+          MODEL: qwen2.5-coder:1.5b-instruct
+          GENERATION_CONCURRENCY: 1
+          MAX_QUEUE_SIZE: 4
+          ENABLE_PROMPT_CACHE: "true"
+          MAX_CACHE_ENTRIES: 20
+          MAX_FILE_READ_BYTES: 32768
+          MAX_CONTEXT_FILES: 4
+          MAX_CONTEXT_BYTES: 12000
+        run: npm test

@@ -10,6 +10,7 @@ import {
   LOG_LEVEL_PRIORITY,
   SENSITIVE_LOG_KEY_PATTERN
 } from './config.js';
+import { createOllamaClient } from './ollama.js';
 import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-limit.js';
 
 export { createPromptCache } from './cache.js';
@@ -90,12 +91,12 @@ export function createGenerationQueue({ maxQueueSize = 4, generationConcurrency 
     }
   }
   function run(job) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolvePromise, reject) => {
       if (queue.length >= maxQueueSize) {
         reject(Object.assign(new Error('Fila de geração cheia. Tente novamente em alguns instantes.'), { statusCode: 429 }));
         return;
       }
-      queue.push({ job, resolve, reject });
+      queue.push({ job, resolve: resolvePromise, reject });
       drain();
     });
   }
@@ -105,6 +106,7 @@ export function createGenerationQueue({ maxQueueSize = 4, generationConcurrency 
 const generationQueue = createGenerationQueue({ maxQueueSize: MAX_QUEUE_SIZE, generationConcurrency: GENERATION_CONCURRENCY });
 const promptCache = createPromptCache({ enabled: ENABLE_PROMPT_CACHE, maxEntries: MAX_CACHE_ENTRIES });
 const rateLimiter = createFixedWindowRateLimiter({ enabled: ENABLE_RATE_LIMIT, windowMs: RATE_LIMIT_WINDOW_MS, maxRequests: RATE_LIMIT_MAX_REQUESTS, maxClients: RATE_LIMIT_MAX_CLIENTS });
+const ollamaClient = createOllamaClient({ baseUrl: OLLAMA_URL, model: MODEL });
 
 function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers });
@@ -121,7 +123,7 @@ function openEventStream(response) {
 }
 
 function readJsonBody(request) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolvePromise, reject) => {
     let size = 0;
     let raw = '';
     request.on('data', chunk => {
@@ -135,11 +137,11 @@ function readJsonBody(request) {
     });
     request.on('end', () => {
       if (!raw.trim()) {
-        resolve({});
+        resolvePromise({});
         return;
       }
       try {
-        resolve(JSON.parse(raw));
+        resolvePromise(JSON.parse(raw));
       } catch {
         reject(Object.assign(new Error('JSON inválido.'), { statusCode: 400 }));
       }
@@ -260,59 +262,12 @@ export async function buildContextFromFiles({ context = '', contextFiles = [], p
   return { context: parts.join('\n'), files, totalBytes, truncated };
 }
 
-async function callOllamaGenerate(prompt, signal) {
-  const response = await fetch(`${OLLAMA_URL}/api/generate`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, prompt, stream: false, options: { num_ctx: 2048, num_predict: 512, temperature: 0.2 } }),
-    signal
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw Object.assign(new Error('Falha ao chamar Ollama.'), { statusCode: 502, detail: detail.slice(0, 500) });
-  }
-  return response.json();
+function callOllamaGenerate(prompt, signal) {
+  return ollamaClient.generate(prompt, { signal });
 }
 
-async function callOllamaGenerateStream(prompt, { signal, onToken } = {}) {
-  const response = await fetch(`${OLLAMA_URL}/api/generate`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, prompt, stream: true, options: { num_ctx: 2048, num_predict: 512, temperature: 0.2 } }),
-    signal
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw Object.assign(new Error('Falha ao chamar Ollama em streaming.'), { statusCode: 502, detail: detail.slice(0, 500) });
-  }
-  if (!response.body) throw Object.assign(new Error('Runtime local não retornou corpo de streaming.'), { statusCode: 502 });
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let fullResponse = '';
-  while (true) {
-    const chunk = await reader.read();
-    buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      let parsed;
-      try {
-        parsed = JSON.parse(trimmed);
-      } catch {
-        continue;
-      }
-      if (parsed.response) {
-        fullResponse += parsed.response;
-        onToken?.(parsed.response, parsed);
-      }
-      if (parsed.done) return { response: fullResponse, done: true, total_duration: parsed.total_duration };
-    }
-    if (chunk.done) break;
-  }
-  return { response: fullResponse, done: false };
+function callOllamaGenerateStream(prompt, { signal, onToken } = {}) {
+  return ollamaClient.generateStream(prompt, { signal, onToken });
 }
 
 async function buildGenerateRequestPayload(request, requestId) {

@@ -79,6 +79,7 @@ Os testes atuais validam:
 - fila de geração, limite de fila cheia e concorrência conservadora;
 - cache simples por hash de prompt, incluindo reaproveitamento e limite de entradas;
 - leitura segura de arquivos com bloqueio de travessia, pastas sensíveis, `.env` real e arquivos grandes;
+- montagem de contexto para geração a partir de lista controlada de arquivos textuais;
 - rotas HTTP locais `GET /health`, `GET /api/status`, `POST /api/generate` com entrada inválida, `POST /api/read-file` com caminho inválido e rota 404.
 
 Esses testes não chamam o Ollama nem exigem modelo instalado, então podem rodar em máquina fraca apenas com Node.js 20+.
@@ -99,6 +100,8 @@ Esses testes não chamam o Ollama nem exigem modelo instalado, então podem roda
 | `MAX_CACHE_ENTRIES` | `20` | Quantidade máxima de respostas em cache |
 | `PROJECT_ROOT` | pasta atual | Raiz permitida para leitura segura de arquivos |
 | `MAX_FILE_READ_BYTES` | `32768` | Tamanho máximo de arquivo lido pela API |
+| `MAX_CONTEXT_FILES` | `4` | Quantidade máxima de arquivos que `/api/generate` aceita em `contextFiles` |
+| `MAX_CONTEXT_BYTES` | `12000` | Tamanho máximo do contexto final montado para o prompt |
 | `ALLOWED_FILE_EXTENSIONS` | lista segura | Extensões permitidas separadas por vírgula |
 
 Extensões permitidas por padrão:
@@ -140,8 +143,23 @@ Campos aceitos:
 - `task` obrigatório: tarefa de programação.
 - `language` opcional: foco técnico, por exemplo `Node.js`, `Dart`, `Flutter`, `MySQL`.
 - `context` opcional: trecho controlado do projeto.
+- `contextFiles` opcional: lista de caminhos relativos para arquivos textuais pequenos dentro do projeto.
 
-A resposta informa `cached: true` quando a resposta veio do cache local em memória.
+Exemplo com arquivos do projeto como contexto:
+
+```bash
+curl -X POST http://127.0.0.1:3131/api/generate ^
+  -H "Content-Type: application/json" ^
+  -d "{\"task\":\"Revise esta função\",\"language\":\"Node.js\",\"contextFiles\":[\"src/server.js\"]}"
+```
+
+A resposta informa:
+
+- `cached: true` quando a resposta veio do cache local em memória;
+- `contextFiles` com os arquivos incluídos no prompt;
+- `contextTruncated: true` quando o contexto foi limitado por `MAX_CONTEXT_BYTES`.
+
+`contextFiles` reutiliza as mesmas proteções de `POST /api/read-file`: não aceita caminho absoluto, travessia, `.env`, `.git`, `node_modules`, artefatos gerados, extensões fora da allowlist ou arquivos grandes.
 
 ### `POST /api/read-file`
 
@@ -178,9 +196,11 @@ MAX_QUEUE_SIZE=4
 ENABLE_PROMPT_CACHE=true
 MAX_CACHE_ENTRIES=20
 MAX_FILE_READ_BYTES=32768
+MAX_CONTEXT_FILES=4
+MAX_CONTEXT_BYTES=12000
 ```
 
-Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_FILE_READ_BYTES` ou desative cache com `ENABLE_PROMPT_CACHE=false`.
+Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_FILE_READ_BYTES`, reduza `MAX_CONTEXT_FILES`, reduza `MAX_CONTEXT_BYTES` ou desative cache com `ENABLE_PROMPT_CACHE=false`.
 
 ## Decisões de arquitetura
 
@@ -191,14 +211,14 @@ Se a máquina ficar com pouca memória, reduza `MAX_CACHE_ENTRIES`, reduza `MAX_
 - Fila de concorrência baixa para evitar múltiplas inferências simultâneas.
 - Cache em memória pequeno para economizar CPU em prompts repetidos.
 - Leitura segura limitada a arquivos textuais pequenos dentro do projeto.
+- Contexto por arquivos integrado ao `/api/generate` com limite de quantidade e bytes.
 - Script Windows em PowerShell para iniciar com padrões conservadores e verificar Ollama.
-- Funções de prompt, cache, fila, leitura de arquivo e servidor exportadas para testes sem iniciar o processo via `npm start`.
+- Funções de prompt, cache, fila, leitura de arquivo, montagem de contexto e servidor exportadas para testes sem iniciar o processo via `npm start`.
 - Rotas HTTP básicas testadas sem depender do Ollama.
 - Prompt técnico focado em respostas curtas, seguras e úteis para código.
 
 ## Próximos passos
 
 - Adicionar endpoint de streaming em rota separada.
-- Integrar leitura segura de arquivo ao fluxo de geração com contexto controlado por lista de arquivos.
 - Documentar integração futura com plugin/extensão VS Code.
 - Considerar CI leve com GitHub Actions usando Node.js 20.

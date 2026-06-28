@@ -31,8 +31,9 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 
 ## Critérios parcialmente atendidos
 
-- Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js` e `src/ollama.js`, mas `src/server.js` ainda concentra parte da lógica principal.
+- Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js`, `src/ollama.js` e `src/cache.js`, mas `src/server.js` ainda concentra parte da lógica principal.
 - Cliente Ollama: `src/ollama.js` já possui helpers testáveis para payload e parsing de streaming, mas a integração completa no servidor deve ser feita em passo pequeno e validado.
+- Cache: `src/cache.js` já possui implementação testável equivalente ao cache atual do servidor, mas ainda falta trocar o cache interno de `src/server.js` pelo módulo.
 
 ## Não faz parte do MVP backend
 
@@ -55,7 +56,7 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 
 1. Integrar `src/ollama.js` em `src/server.js` em commit pequeno, substituindo apenas montagem de payload e parsing de linha de streaming.
 2. Integrar `src/http.js` em `src/server.js` em commit pequeno, preservando `MAX_BODY_BYTES`.
-3. Extrair cache para `src/cache.js` com testes próprios.
+3. Integrar `src/cache.js` em `src/server.js` substituindo a função interna duplicada, sem alterar o formato de `/health` e `/api/status`.
 4. Extrair fila para `src/generation-queue.js` com testes próprios.
 5. Extrair leitura segura para `src/project-files.js` com testes próprios.
 6. Depois da modularização, revisar se o backend atende formalmente ao MVP e registrar decisão.

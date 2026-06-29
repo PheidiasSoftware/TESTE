@@ -42,6 +42,36 @@ export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowe
   return { absolutePath: safePath, relativePath };
 }
 
+export function truncateUtf8ToBytes(value, maxBytes) {
+  const text = String(value ?? '');
+  const limit = Number(maxBytes);
+
+  if (!Number.isSafeInteger(limit) || limit <= 0) return '';
+
+  const buffer = Buffer.from(text, 'utf8');
+  if (buffer.length <= limit) return text;
+
+  let end = limit;
+  while (end > 0 && (buffer[end] & 0b11000000) === 0b10000000) {
+    end -= 1;
+  }
+
+  const firstByte = buffer[end];
+  const sequenceLength = firstByte >= 0b11110000
+    ? 4
+    : firstByte >= 0b11100000
+      ? 3
+      : firstByte >= 0b11000000
+        ? 2
+        : 1;
+
+  if (end + sequenceLength > limit) {
+    return buffer.subarray(0, end).toString('utf8');
+  }
+
+  return buffer.subarray(0, limit).toString('utf8');
+}
+
 export async function readProjectFile({ path, projectRoot, maxBytes, allowedFileExtensions = [] } = {}) {
   const safeFile = validateSafeProjectFilePath({
     requestedPath: path,
@@ -82,11 +112,12 @@ export async function buildContextFromFiles({
   allowedFileExtensions = []
 } = {}) {
   if (contextFiles === undefined || contextFiles === null || contextFiles.length === 0) {
+    const safeContext = typeof context === 'string' ? truncateUtf8ToBytes(context, maxContextBytes) : '';
     return {
-      context,
+      context: safeContext,
       files: [],
-      totalBytes: Buffer.byteLength(context, 'utf8'),
-      truncated: false
+      totalBytes: Buffer.byteLength(safeContext, 'utf8'),
+      truncated: Buffer.byteLength(String(context || ''), 'utf8') > Buffer.byteLength(safeContext, 'utf8')
     };
   }
 
@@ -98,11 +129,11 @@ export async function buildContextFromFiles({
     throw Object.assign(new Error(`contextFiles aceita no máximo ${maxFiles} arquivo(s).`), { statusCode: 400 });
   }
 
-  const safeContext = typeof context === 'string' ? context : '';
-  const parts = safeContext ? [safeContext.slice(0, maxContextBytes)] : [];
+  const safeContext = typeof context === 'string' ? truncateUtf8ToBytes(context, maxContextBytes) : '';
+  const parts = safeContext ? [safeContext] : [];
   const files = [];
   let totalBytes = Buffer.byteLength(parts.join('\n'), 'utf8');
-  let truncated = false;
+  let truncated = typeof context === 'string' && Buffer.byteLength(context, 'utf8') > Buffer.byteLength(safeContext, 'utf8');
 
   for (const item of contextFiles) {
     if (typeof item !== 'string') {
@@ -123,9 +154,8 @@ export async function buildContextFromFiles({
       break;
     }
 
-    let fileContent = file.content;
-    if (Buffer.byteLength(fileContent, 'utf8') > availableBytes) {
-      fileContent = Buffer.from(fileContent, 'utf8').subarray(0, availableBytes).toString('utf8');
+    const fileContent = truncateUtf8ToBytes(file.content, availableBytes);
+    if (Buffer.byteLength(file.content, 'utf8') > Buffer.byteLength(fileContent, 'utf8')) {
       truncated = true;
     }
 

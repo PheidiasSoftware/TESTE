@@ -8,6 +8,7 @@ import {
   normalizeLogLevel,
   normalizeOllamaUrl,
   parseBooleanFlag,
+  parseInteger,
   parsePort
 } from '../src/config.js';
 
@@ -25,6 +26,30 @@ test('loadConfig keeps conservative defaults for weak local PCs', () => {
   assert.equal(config.LOG_LEVEL, 'info');
   assert.equal(config.ENABLE_RATE_LIMIT, true);
   assert.equal(config.TRUST_PROXY, false);
+});
+
+test('parseInteger accepts only complete safe integer environment values', () => {
+  assert.equal(parseInteger('42', 7), 42);
+  assert.equal(parseInteger(' 42 ', 7), 42);
+  assert.equal(parseInteger('-3', 7), -3);
+  assert.equal(parseInteger('+3', 7), 3);
+  assert.equal(parseInteger('42abc', 7), 7);
+  assert.equal(parseInteger('4.2', 7), 7);
+  assert.equal(parseInteger('1e3', 7), 7);
+  assert.equal(parseInteger('9007199254740993', 7), 7);
+  assert.equal(parseInteger(undefined, 7), 7);
+});
+
+test('loadConfig falls back when numeric safety limits are partial or unsafe integers', () => {
+  const config = loadConfig({
+    MAX_BODY_BYTES: '65536x',
+    REQUEST_TIMEOUT_MS: '120000.5',
+    MAX_QUEUE_SIZE: '1e3'
+  });
+
+  assert.equal(config.MAX_BODY_BYTES, 65536);
+  assert.equal(config.REQUEST_TIMEOUT_MS, 120000);
+  assert.equal(config.MAX_QUEUE_SIZE, 4);
 });
 
 test('loadConfig normalizes invalid port values to the safe local default', () => {

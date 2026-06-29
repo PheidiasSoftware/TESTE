@@ -3,11 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createPromptCache } from './cache.js';
-import {
-  CONFIG,
-  LOG_LEVEL_PRIORITY,
-  SENSITIVE_LOG_KEY_PATTERN
-} from './config.js';
+import { CONFIG } from './config.js';
 import { createGenerationQueue } from './generation-queue.js';
 import {
   openEventStream,
@@ -15,6 +11,7 @@ import {
   sendJson,
   sendServerEvent
 } from './http.js';
+import { createStructuredLogger } from './logger.js';
 import { createOllamaClient } from './ollama.js';
 import {
   buildContextFromFiles,
@@ -25,6 +22,7 @@ import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-lim
 
 export { createPromptCache } from './cache.js';
 export { createGenerationQueue } from './generation-queue.js';
+export { createStructuredLogger, redactForLog } from './logger.js';
 export {
   buildContextFromFiles,
   readProjectFile,
@@ -54,33 +52,6 @@ const {
   RATE_LIMIT_MAX_CLIENTS,
   TRUST_PROXY
 } = CONFIG;
-
-export function redactForLog(value, depth = 0) {
-  if (depth > 5) return '[max-depth]';
-  if (value === null || value === undefined) return value;
-  if (typeof value === 'string') return value.length > 300 ? `${value.slice(0, 300)}...` : value;
-  if (typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.slice(0, 20).map(item => redactForLog(item, depth + 1));
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, SENSITIVE_LOG_KEY_PATTERN.test(key) ? '[redacted]' : redactForLog(item, depth + 1)]));
-}
-
-export function createStructuredLogger({ level = 'info', sink = console.log } = {}) {
-  const configuredPriority = LOG_LEVEL_PRIORITY[level] ?? LOG_LEVEL_PRIORITY.info;
-  function shouldLog(eventLevel) {
-    const eventPriority = LOG_LEVEL_PRIORITY[eventLevel] ?? LOG_LEVEL_PRIORITY.info;
-    return configuredPriority > 0 && eventPriority <= configuredPriority;
-  }
-  function log(eventLevel, event, details = {}) {
-    if (!shouldLog(eventLevel)) return;
-    sink(JSON.stringify({ timestamp: new Date().toISOString(), level: eventLevel, service: 'teste-local-code-llm-backend', event, ...redactForLog(details) }));
-  }
-  return {
-    error: (event, details) => log('error', event, details),
-    warn: (event, details) => log('warn', event, details),
-    info: (event, details) => log('info', event, details),
-    debug: (event, details) => log('debug', event, details)
-  };
-}
 
 const logger = createStructuredLogger({ level: LOG_LEVEL });
 

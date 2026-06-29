@@ -8,6 +8,7 @@ import {
   normalizeAllowedFileExtension,
   normalizeHost,
   normalizeLogLevel,
+  normalizeModelName,
   normalizeOllamaUrl,
   parseBooleanFlag,
   parseInteger,
@@ -28,6 +29,25 @@ test('loadConfig keeps conservative defaults for weak local PCs', () => {
   assert.equal(config.LOG_LEVEL, 'info');
   assert.equal(config.ENABLE_RATE_LIMIT, true);
   assert.equal(config.TRUST_PROXY, false);
+});
+
+test('normalizeModelName accepts common lightweight Ollama model names', () => {
+  assert.equal(normalizeModelName(' qwen2.5-coder:1.5b-instruct '), 'qwen2.5-coder:1.5b-instruct');
+  assert.equal(normalizeModelName('deepseek-coder:1.3b'), 'deepseek-coder:1.3b');
+  assert.equal(normalizeModelName('namespace/model.name:tag_1'), 'namespace/model.name:tag_1');
+});
+
+test('normalizeModelName rejects unsafe or ambiguous model names', () => {
+  assert.equal(normalizeModelName(''), 'qwen2.5-coder:1.5b-instruct');
+  assert.equal(normalizeModelName('model with spaces'), 'qwen2.5-coder:1.5b-instruct');
+  assert.equal(normalizeModelName('../model:latest'), 'qwen2.5-coder:1.5b-instruct');
+  assert.equal(normalizeModelName('model?token=secret'), 'qwen2.5-coder:1.5b-instruct');
+  assert.equal(normalizeModelName('a'.repeat(181)), 'qwen2.5-coder:1.5b-instruct');
+});
+
+test('loadConfig normalizes MODEL before exposing config status', () => {
+  assert.equal(loadConfig({ MODEL: ' deepseek-coder:1.3b ' }).MODEL, 'deepseek-coder:1.3b');
+  assert.equal(loadConfig({ MODEL: 'bad model name' }).MODEL, 'qwen2.5-coder:1.5b-instruct');
 });
 
 test('normalizeHost keeps the backend bound to local interfaces by default', () => {

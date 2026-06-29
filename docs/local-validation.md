@@ -32,6 +32,8 @@ npm run test:windows
 
 Esse comando executa `scripts/test-windows.ps1`, confirma que o comando foi iniciado na raiz do repositório, valida Node.js 20+, define padrões locais leves e roda apenas a suíte offline. Ele não inicia Ollama, não baixa modelos e não executa código gerado por usuário.
 
+O helper também fixa explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000`, alinhando os limites de payload e timeout com a configuração padrão do backend e com a CI.
+
 O teste usa o runner nativo do Node.js e cobre:
 
 - montagem de prompt técnico;
@@ -53,6 +55,8 @@ npm run start:windows
 ```
 
 Esse comando executa `scripts/start-windows.ps1`, confirma que foi iniciado na raiz do repositório, valida Node.js 20+, aplica padrões locais conservadores quando as variáveis não foram definidas, verifica se o Ollama responde em `OLLAMA_URL` e só então inicia `node src/server.js`.
+
+Entre os padrões explícitos do helper estão `HOST=127.0.0.1`, `GENERATION_CONCURRENCY=1`, `MAX_QUEUE_SIZE=4`, `MAX_BODY_BYTES=65536`, `REQUEST_TIMEOUT_MS=120000`, limites pequenos de contexto e rate limit local ativado.
 
 Ou, em qualquer sistema:
 
@@ -176,6 +180,8 @@ Resultado esperado:
 ## Validação por CI leve
 
 O workflow `.github/workflows/node-test.yml` roda `npm test` em Node.js 20 para `push`, `pull_request` e `workflow_dispatch`.
+
+A CI usa os mesmos limites conservadores principais dos helpers Windows, incluindo host local, modelo leve, concorrência 1, fila pequena, cache pequeno, `MAX_BODY_BYTES=65536`, `REQUEST_TIMEOUT_MS=120000`, rate limit local e logs silenciosos.
 
 Use a CI como evidência complementar quando não houver acesso ao PC local. A CI não substitui o teste opcional com Ollama, porque ela não instala modelo nem chama geração válida. Ela valida apenas as partes offline do backend.
 

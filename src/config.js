@@ -25,7 +25,9 @@ export const LOG_LEVEL_PRIORITY = {
 
 export const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content)/i;
 
+const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
+const ALLOWED_LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
 export function parseInteger(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -39,6 +41,13 @@ export function parseInteger(value, fallback) {
 
 function parseMinimumInteger(value, fallback, minimum) {
   return Math.max(minimum, parseInteger(value, fallback));
+}
+
+export function normalizeHost(value, fallback = DEFAULT_HOST) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return fallback;
+
+  return ALLOWED_LOCAL_HOSTS.has(normalized) ? normalized : fallback;
 }
 
 export function parsePort(value, fallback = 3131) {
@@ -105,7 +114,7 @@ export function getAllowedFileExtensions(env = process.env) {
 
 export function loadConfig(env = process.env) {
   return {
-    HOST: env.HOST || '127.0.0.1',
+    HOST: normalizeHost(env.HOST),
     PORT: parsePort(env.PORT || '3131', 3131),
     OLLAMA_URL: normalizeOllamaUrl(env.OLLAMA_URL),
     MODEL: env.MODEL || 'qwen2.5-coder:1.5b-instruct',

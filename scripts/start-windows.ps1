@@ -16,6 +16,20 @@
 
 $ErrorActionPreference = "Stop"
 
+function Assert-CommandAvailable {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$CommandName,
+
+    [Parameter(Mandatory = $true)]
+    [string]$InstallHint
+  )
+
+  if (-not (Get-Command $CommandName -ErrorAction SilentlyContinue)) {
+    throw "$CommandName was not found in PATH. $InstallHint"
+  }
+}
+
 if (-not (Test-Path -Path "package.json" -PathType Leaf)) {
   throw "package.json not found. Run this script from the repository root."
 }
@@ -23,6 +37,8 @@ if (-not (Test-Path -Path "package.json" -PathType Leaf)) {
 if (-not (Test-Path -Path "src/server.js" -PathType Leaf)) {
   throw "src/server.js not found. Run this script from the repository root."
 }
+
+Assert-CommandAvailable -CommandName "node" -InstallHint "Install Node.js 20+ and reopen PowerShell."
 
 $NodeVersionRaw = node -p "process.versions.node"
 $NodeMajorVersion = [int]($NodeVersionRaw.Split('.')[0])

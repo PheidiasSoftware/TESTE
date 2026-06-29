@@ -163,6 +163,20 @@ Resultado esperado:
 - evento `done` ao final;
 - evento `error` se o Ollama não estiver disponível ou se houver timeout.
 
+## Validação por CI leve
+
+O workflow `.github/workflows/node-test.yml` roda `npm test` em Node.js 20 para `push`, `pull_request` e `workflow_dispatch`.
+
+Use a CI como evidência complementar quando não houver acesso ao PC local. A CI não substitui o teste opcional com Ollama, porque ela não instala modelo nem chama geração válida. Ela valida apenas as partes offline do backend.
+
+Critério mínimo para seguir com novas refatorações de `src/server.js`:
+
+- workflow `Node.js tests` concluído com sucesso no commit mais recente; ou
+- `npm test` executado manualmente em um checkout limpo; e
+- nenhuma falha nova em testes de contrato público (`/health`, `/api/status`, rate limit, logging e leitura segura).
+
+Se a CI não aparecer para um commit, trate como ausência de evidência, não como falha. Nessa situação, evite mudanças grandes e prefira documentação, testes isolados ou correções pequenas e reversíveis.
+
 ## Checklist antes de novas mudanças de backend
 
 Antes de modularizar mais o `src/server.js`, confirme:

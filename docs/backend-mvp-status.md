@@ -47,6 +47,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - `src/server.js` integrado ao módulo `src/logger.js`, mantendo reexports para compatibilidade com testes e uso técnico futuro.
 - Guia `docs/local-validation.md` criado para validação mínima sem Ollama, health/status, entrada inválida, leitura segura, teste opcional com Ollama e checklist antes de novas mudanças no backend.
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
+- `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
 
 ## Critérios parcialmente atendidos
 
@@ -58,6 +59,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Logging: `src/logger.js` está integrado ao servidor; falta validação final por `npm test`/CI após a extração.
 - Validação local: existe guia documentado em `docs/local-validation.md`, mas ainda é necessário executar `npm test` localmente ou confirmar CI verde.
+- Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada, mas ainda precisa de validação por `npm test`/CI.
 
 ## Não faz parte do MVP backend
 

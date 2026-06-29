@@ -53,6 +53,9 @@ powershell -ExecutionPolicy Bypass -File scripts/start-windows.ps1
 
 O script:
 
+- confirma que está sendo executado na raiz do repositório;
+- valida Node.js 20+ antes de iniciar;
+- mantém `HOST=127.0.0.1` e `PORT=3131` quando as variáveis não foram definidas;
 - mantém `GENERATION_CONCURRENCY=1` quando a variável não foi definida;
 - mantém `MAX_QUEUE_SIZE=4` quando a variável não foi definida;
 - mantém cache pequeno por padrão;
@@ -217,10 +220,3 @@ curl -X POST http://127.0.0.1:3131/api/read-file ^
 ```
 
 Proteções aplicadas:
-
-- aceita apenas caminho relativo ao projeto;
-- bloqueia travessia como `../arquivo`;
-- bloqueia `.git`, `node_modules`, `dist`, `build`, `.next` e `.cache`;
-- bloqueia arquivos `.env` e `.env.*`;
-- aceita apenas extensões textuais permitidas;
-- bloqueia arquivos acima de `MAX_FILE_READ_BYTES`.

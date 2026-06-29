@@ -54,6 +54,21 @@ test('createFixedWindowRateLimiter pode ser desativado por configuração', () =
   assert.equal(limiter.getStatus().blocked, 0);
 });
 
+test('createFixedWindowRateLimiter expõe trackedClients sem quebrar activeClients', () => {
+  const limiter = createFixedWindowRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 10,
+    now: () => 1_700_000_000_000
+  });
+
+  limiter.check('cliente-a');
+  limiter.check('cliente-b');
+
+  const status = limiter.getStatus();
+  assert.equal(status.trackedClients, 2);
+  assert.equal(status.activeClients, status.trackedClients);
+});
+
 test('createFixedWindowRateLimiter poda clientes expirados para limitar memória', () => {
   let currentTime = 1_700_000_000_000;
   const limiter = createFixedWindowRateLimiter({
@@ -66,12 +81,14 @@ test('createFixedWindowRateLimiter poda clientes expirados para limitar memória
   limiter.check('cliente-a');
   limiter.check('cliente-b');
   assert.equal(limiter.getStatus().activeClients, 2);
+  assert.equal(limiter.getStatus().trackedClients, 2);
 
   currentTime += 101;
   const removed = limiter.pruneExpired();
 
   assert.equal(removed, 2);
   assert.equal(limiter.getStatus().activeClients, 0);
+  assert.equal(limiter.getStatus().trackedClients, 0);
   assert.equal(limiter.getStatus().prunedClients, 2);
 });
 

@@ -77,15 +77,28 @@ export function normalizeLogLevel(value, fallback = 'info') {
   return Object.hasOwn(LOG_LEVEL_PRIORITY, normalized) ? normalized : fallback;
 }
 
+export function normalizeAllowedFileExtension(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+
+  const extension = normalized.startsWith('.') ? normalized : `.${normalized}`;
+  if (!/^\.[a-z0-9][a-z0-9_-]*$/.test(extension)) return null;
+
+  return extension;
+}
+
 export function getAllowedFileExtensions(env = process.env) {
   const raw = env.ALLOWED_FILE_EXTENSIONS;
   if (!raw) return DEFAULT_ALLOWED_FILE_EXTENSIONS;
 
-  const parsed = raw
-    .split(',')
-    .map(item => item.trim().toLowerCase())
-    .filter(Boolean)
-    .map(item => (item.startsWith('.') ? item : `.${item}`));
+  const parsed = Array.from(
+    new Set(
+      raw
+        .split(',')
+        .map(normalizeAllowedFileExtension)
+        .filter(Boolean)
+    )
+  );
 
   return parsed.length > 0 ? parsed : DEFAULT_ALLOWED_FILE_EXTENSIONS;
 }

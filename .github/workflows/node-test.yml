@@ -44,4 +44,10 @@ jobs:
           MAX_FILE_READ_BYTES: 32768
           MAX_CONTEXT_FILES: 4
           MAX_CONTEXT_BYTES: 12000
+          ENABLE_RATE_LIMIT: "true"
+          RATE_LIMIT_WINDOW_MS: 60000
+          RATE_LIMIT_MAX_REQUESTS: 30
+          RATE_LIMIT_MAX_CLIENTS: 500
+          TRUST_PROXY: "false"
+          LOG_LEVEL: silent
         run: npm test

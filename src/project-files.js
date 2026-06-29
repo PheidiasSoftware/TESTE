@@ -44,8 +44,9 @@ export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowe
 
 export function truncateUtf8ToBytes(value, maxBytes) {
   const text = String(value ?? '');
-  const limit = Number(maxBytes);
+  if (maxBytes === undefined || maxBytes === null) return text;
 
+  const limit = Number(maxBytes);
   if (!Number.isSafeInteger(limit) || limit <= 0) return '';
 
   const buffer = Buffer.from(text, 'utf8');

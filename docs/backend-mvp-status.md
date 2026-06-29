@@ -24,6 +24,8 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js` e `scripts/test-windows.ps1`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A tentativa de checkout local foi bloqueada pelo ambiente, então a alteração segura foi alinhar `.github/workflows/node-test.yml` aos padrões conservadores do helper Windows, adicionando `ENABLE_RATE_LIMIT`, `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_MAX_CLIENTS`, `TRUST_PROXY` e `LOG_LEVEL=silent` ao ambiente de teste offline da CI.
 
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1`, `scripts/start-windows.ps1` e `test/config.test.js`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A tentativa de checkout local continuou bloqueada pelo ambiente, então a alteração segura foi alinhar o helper de inicialização Windows ao helper de teste: `scripts/start-windows.ps1` agora valida raiz do repositório, exige Node.js 20+, define explicitamente padrões conservadores de ambiente e imprime a versão do Node antes de iniciar o backend.
+
 Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -41,7 +43,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - `contextFiles` em `/api/generate` reutilizando a leitura segura.
 - Rate limit local em memória nas rotas pesadas.
 - Logs estruturados em JSON Lines com redaction de campos sensíveis.
-- Script PowerShell para início conservador no Windows.
+- Script PowerShell para início conservador no Windows, com checagem de raiz do repositório, Node.js 20+, padrões locais explícitos e verificação leve do Ollama antes do start.
 - Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`, incluindo checagem de raiz do repositório e Node.js 20+.
 - Testes com `node --test` sem chamar Ollama.
 - CI leve com Node.js 20 e ambiente offline alinhado ao helper Windows para rate limit, proxy confiável desativado e logs silenciosos.
@@ -59,6 +61,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Guia `docs/local-validation.md` criado para validação mínima sem Ollama, health/status, entrada inválida, leitura segura, teste opcional com Ollama e checklist antes de novas mudanças no backend.
 - Guia `docs/local-validation.md` ampliado com validação por CI leve, critérios mínimos para continuar refatorando `src/server.js` e orientação para tratar ausência de checks como ausência de evidência, não como falha.
 - Guia `docs/local-validation.md` atualizado com `npm run test:windows` como alternativa Windows para validação offline, incluindo checagem de raiz do repositório e Node.js 20+.
+- Guia `docs/local-validation.md` atualizado com o comportamento endurecido de `npm run start:windows`, incluindo checagem de raiz do repositório, Node.js 20+ e padrões explícitos antes do start.
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
 - `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
 - `src/rate-limit.js` agora expõe `trackedClients` no status público, preservando `activeClients` como alias de compatibilidade; `test/rate-limit.test.js` cobre essa compatibilidade.
@@ -73,7 +76,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Fila de geração: `src/generation-queue.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Logging: `src/logger.js` está integrado ao módulo `src/logger.js`; falta validação final por `npm test`/CI após a extração.
-- Validação local: existe guia documentado em `docs/local-validation.md` e helper `npm run test:windows`, mas ainda é necessário executar `npm test`, `npm run test:windows` ou confirmar CI verde.
+- Validação local: existe guia documentado em `docs/local-validation.md` e helpers `npm run test:windows`/`npm run start:windows`, mas ainda é necessário executar `npm test`, `npm run test:windows` ou confirmar CI verde.
 - Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada; foi corrigida a compatibilidade do campo `trackedClients`, mas ainda precisa de validação por `npm test`/CI.
 - CI/status remoto: a CI agora possui ambiente de teste mais completo, mas ainda é necessário confirmar execução verde no commit mais recente.
 

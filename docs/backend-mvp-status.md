@@ -18,6 +18,8 @@ Em verificação anterior de 2026-06-29, o commit conhecido `f45af224071e6b63395
 
 Em nova execução de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/rate-limit.js` e `test/server.test.js`. Não foram encontrados PRs recentes ou issues abertas relevantes pelo conector, e a busca textual não retornou registros claros de Claude Agent. A tentativa de checkout local para rodar `npm test` foi bloqueada pelo ambiente de execução, então nenhuma refatoração de código foi feita. A alteração segura desta execução foi reforçar `docs/local-validation.md` com critérios de validação por CI leve e conduta quando não houver evidência de checks.
 
+Em execução posterior de 2026-06-29, o repositório foi reexaminado novamente antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `test/server.test.js` e `scripts/start-windows.ps1`. Não havia PRs recentes pelo conector. A decisão segura foi adicionar uma validação offline para Windows: `scripts/test-windows.ps1`, comando `npm run test:windows` e documentação correspondente. O script apenas roda a suíte offline com variáveis conservadoras; não chama Ollama, não baixa modelos e não executa código gerado.
+
 Até essa confirmação, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -36,6 +38,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Rate limit local em memória nas rotas pesadas.
 - Logs estruturados em JSON Lines com redaction de campos sensíveis.
 - Script PowerShell para início conservador no Windows.
+- Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`.
 - Testes com `node --test` sem chamar Ollama.
 - CI leve com Node.js 20.
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves, integração de clientes, validação local e revisão de prontidão do MVP.
@@ -51,6 +54,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - `src/server.js` integrado ao módulo `src/logger.js`, mantendo reexports para compatibilidade com testes e uso técnico futuro.
 - Guia `docs/local-validation.md` criado para validação mínima sem Ollama, health/status, entrada inválida, leitura segura, teste opcional com Ollama e checklist antes de novas mudanças no backend.
 - Guia `docs/local-validation.md` ampliado com validação por CI leve, critérios mínimos para continuar refatorando `src/server.js` e orientação para tratar ausência de checks como ausência de evidência, não como falha.
+- Guia `docs/local-validation.md` atualizado com `npm run test:windows` como alternativa Windows para validação offline.
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
 - `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
 - `src/rate-limit.js` agora expõe `trackedClients` no status público, preservando `activeClients` como alias de compatibilidade; `test/rate-limit.test.js` cobre essa compatibilidade.
@@ -65,7 +69,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Fila de geração: `src/generation-queue.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Logging: `src/logger.js` está integrado ao módulo `src/logger.js`; falta validação final por `npm test`/CI após a extração.
-- Validação local: existe guia documentado em `docs/local-validation.md`, mas ainda é necessário executar `npm test` localmente ou confirmar CI verde.
+- Validação local: existe guia documentado em `docs/local-validation.md` e helper `npm run test:windows`, mas ainda é necessário executar `npm test`, `npm run test:windows` ou confirmar CI verde.
 - Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada; foi corrigida a compatibilidade do campo `trackedClients`, mas ainda precisa de validação por `npm test`/CI.
 - CI/status remoto: o conector GitHub não retornou checks nem workflow runs para o commit consultado anteriormente; isso não confirma falha, apenas ausência de evidência de execução.
 
@@ -83,14 +87,14 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 
 - `src/server.js` ainda tem responsabilidade alta; alterações grandes nesse arquivo aumentam risco de regressão.
 - A validação final de `npm test` depende de execução local ou CI, pois o conector GitHub não executa os testes diretamente.
-- O ambiente usado nesta execução bloqueou checkout local do repositório, então não houve como executar `npm test` fora do GitHub Actions.
+- O ambiente usado nas últimas execuções bloqueou checkout local do repositório, então não houve como executar `npm test` fora do GitHub Actions.
 - O commit consultado anteriormente não possuía status/checks disponíveis pelo conector, então ainda não existe evidência objetiva de CI verde.
 - Uso real depende do Ollama instalado, rodando e com modelo leve disponível.
 - Em CPU fraca, respostas podem ser lentas; os limites padrão devem continuar conservadores.
 
 ## Próximas tarefas seguras recomendadas
 
-1. Executar o checklist de `docs/local-validation.md`, começando por `npm test` sem Ollama.
+1. Executar o checklist de `docs/local-validation.md`, começando por `npm test` ou `npm run test:windows` sem Ollama.
 2. Confirmar CI verde no GitHub Actions após as integrações recentes e a correção de contrato de `rateLimit.trackedClients`.
 3. Se testes/CI estiverem verdes, registrar o backend como MVP funcional completo.
 4. Só depois disso extrair roteamento/handlers para módulo dedicado, em alteração pequena.

@@ -25,6 +25,8 @@ export const LOG_LEVEL_PRIORITY = {
 
 export const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content)/i;
 
+const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
+
 function parseInteger(value, fallback) {
   const parsed = Number.parseInt(String(value), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -37,6 +39,21 @@ function parseMinimumInteger(value, fallback, minimum) {
 export function parsePort(value, fallback = 3131) {
   const parsed = parseInteger(value, fallback);
   return parsed >= 1 && parsed <= 65535 ? parsed : fallback;
+}
+
+export function normalizeOllamaUrl(value, fallback = DEFAULT_OLLAMA_URL) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return fallback;
+
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol)) return fallback;
+    url.hash = '';
+    url.search = '';
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return fallback;
+  }
 }
 
 export function parseBooleanFlag(value, defaultValue = true) {
@@ -72,7 +89,7 @@ export function loadConfig(env = process.env) {
   return {
     HOST: env.HOST || '127.0.0.1',
     PORT: parsePort(env.PORT || '3131', 3131),
-    OLLAMA_URL: env.OLLAMA_URL || 'http://127.0.0.1:11434',
+    OLLAMA_URL: normalizeOllamaUrl(env.OLLAMA_URL),
     MODEL: env.MODEL || 'qwen2.5-coder:1.5b-instruct',
     MAX_BODY_BYTES: parseInteger(env.MAX_BODY_BYTES || '65536', 65536),
     REQUEST_TIMEOUT_MS: parseInteger(env.REQUEST_TIMEOUT_MS || '120000', 120000),

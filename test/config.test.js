@@ -5,6 +5,7 @@ import {
   DEFAULT_ALLOWED_FILE_EXTENSIONS,
   getAllowedFileExtensions,
   loadConfig,
+  normalizeAllowedFileExtension,
   normalizeLogLevel,
   normalizeOllamaUrl,
   parseBooleanFlag,
@@ -162,10 +163,36 @@ test('loadConfig applies boolean parsing to public safety flags', () => {
   assert.equal(enabled.TRUST_PROXY, true);
 });
 
+test('normalizeAllowedFileExtension accepts simple safe extensions', () => {
+  assert.equal(normalizeAllowedFileExtension('JS'), '.js');
+  assert.equal(normalizeAllowedFileExtension('.dart'), '.dart');
+  assert.equal(normalizeAllowedFileExtension('my_ext-1'), '.my_ext-1');
+});
+
+test('normalizeAllowedFileExtension rejects unsafe extension entries', () => {
+  assert.equal(normalizeAllowedFileExtension(''), null);
+  assert.equal(normalizeAllowedFileExtension('../x'), null);
+  assert.equal(normalizeAllowedFileExtension('js/ts'), null);
+  assert.equal(normalizeAllowedFileExtension('js\\ts'), null);
+  assert.equal(normalizeAllowedFileExtension('.'), null);
+  assert.equal(normalizeAllowedFileExtension('*'), null);
+});
+
 test('getAllowedFileExtensions parses custom comma separated extensions', () => {
   assert.deepEqual(getAllowedFileExtensions({ ALLOWED_FILE_EXTENSIONS: 'JS, dart, .sql,, md ' }), ['.js', '.dart', '.sql', '.md']);
 });
 
+test('getAllowedFileExtensions deduplicates and ignores unsafe custom extensions', () => {
+  assert.deepEqual(
+    getAllowedFileExtensions({ ALLOWED_FILE_EXTENSIONS: 'js, .JS, ../x, .sql, js/ts, .sql' }),
+    ['.js', '.sql']
+  );
+});
+
 test('getAllowedFileExtensions falls back to safe defaults when custom value is empty', () => {
   assert.deepEqual(getAllowedFileExtensions({ ALLOWED_FILE_EXTENSIONS: ' , , ' }), DEFAULT_ALLOWED_FILE_EXTENSIONS);
+});
+
+test('getAllowedFileExtensions falls back to safe defaults when all custom extensions are rejected', () => {
+  assert.deepEqual(getAllowedFileExtensions({ ALLOWED_FILE_EXTENSIONS: '../x, *, ., js/ts' }), DEFAULT_ALLOWED_FILE_EXTENSIONS);
 });

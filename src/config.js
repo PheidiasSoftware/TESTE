@@ -39,6 +39,11 @@ function parseBooleanFlag(value, defaultValue = true) {
   return value !== 'false';
 }
 
+export function normalizeLogLevel(value, fallback = 'info') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return Object.hasOwn(LOG_LEVEL_PRIORITY, normalized) ? normalized : fallback;
+}
+
 export function getAllowedFileExtensions(env = process.env) {
   const raw = env.ALLOWED_FILE_EXTENSIONS;
   if (!raw) return DEFAULT_ALLOWED_FILE_EXTENSIONS;
@@ -69,7 +74,7 @@ export function loadConfig(env = process.env) {
     MAX_CONTEXT_FILES: parseMinimumInteger(env.MAX_CONTEXT_FILES || '4', 4, 0),
     MAX_CONTEXT_BYTES: parseMinimumInteger(env.MAX_CONTEXT_BYTES || '12000', 12000, 1024),
     ALLOWED_FILE_EXTENSIONS: getAllowedFileExtensions(env),
-    LOG_LEVEL: env.LOG_LEVEL || 'info',
+    LOG_LEVEL: normalizeLogLevel(env.LOG_LEVEL),
     ENABLE_RATE_LIMIT: parseBooleanFlag(env.ENABLE_RATE_LIMIT, true),
     RATE_LIMIT_WINDOW_MS: parseMinimumInteger(env.RATE_LIMIT_WINDOW_MS || '60000', 60000, 1000),
     RATE_LIMIT_MAX_REQUESTS: parseMinimumInteger(env.RATE_LIMIT_MAX_REQUESTS || '30', 30, 1),

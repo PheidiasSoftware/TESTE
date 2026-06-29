@@ -39,6 +39,23 @@ const EXPECTED_ROUTES = [
   'POST /api/read-file'
 ];
 
+function assertPublicRuntimeContract(body) {
+  assert.equal(typeof body.logging.level, 'string');
+  assert.equal(body.logging.format, 'json-lines');
+  assert.equal(body.logging.redaction, 'sensitive-fields');
+  assert.equal(typeof body.rateLimit.enabled, 'boolean');
+  assert.equal(typeof body.rateLimit.windowMs, 'number');
+  assert.equal(typeof body.rateLimit.maxRequests, 'number');
+  assert.equal(typeof body.rateLimit.maxClients, 'number');
+  assert.equal(typeof body.rateLimit.trackedClients, 'number');
+  assert.equal(typeof body.rateLimit.trustProxy, 'boolean');
+  assert.deepEqual(body.rateLimit.appliedToRoutes, [
+    'POST /api/generate',
+    'POST /api/generate-stream',
+    'POST /api/read-file'
+  ]);
+}
+
 test('buildCodingPrompt inclui foco, contexto e tarefa sem depender do Ollama', () => {
   const prompt = buildCodingPrompt({
     task: 'Criar endpoint de health check',
@@ -189,6 +206,7 @@ test('GET /health responde estado local sem chamar Ollama', async () => {
     assert.equal(typeof body.queue.activeGenerations, 'number');
     assert.equal(typeof body.cache.entries, 'number');
     assert.equal(typeof body.fileRead.maxFileReadBytes, 'number');
+    assertPublicRuntimeContract(body);
     assert.deepEqual(body.routes, EXPECTED_ROUTES);
   });
 });
@@ -204,6 +222,7 @@ test('GET /api/status responde métricas da fila sem chamar Ollama', async () =>
     assert.equal(typeof body.queue.completedGenerations, 'number');
     assert.equal(typeof body.cache.hits, 'number');
     assert.ok(Array.isArray(body.fileRead.allowedFileExtensions));
+    assertPublicRuntimeContract(body);
     assert.deepEqual(body.routes, EXPECTED_ROUTES);
   });
 });

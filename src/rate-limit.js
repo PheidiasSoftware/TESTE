@@ -115,12 +115,15 @@ export function createFixedWindowRateLimiter({
   }
 
   function getStatus() {
+    const trackedClients = clients.size;
+
     return {
       enabled: config.enabled,
       windowMs: config.windowMs,
       maxRequests: config.maxRequests,
       maxClients: config.maxClients,
-      activeClients: clients.size,
+      trackedClients,
+      activeClients: trackedClients,
       allowed: metrics.allowed,
       blocked: metrics.blocked,
       prunedClients: metrics.prunedClients

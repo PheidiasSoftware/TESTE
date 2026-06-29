@@ -30,6 +30,8 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1`, `scripts/start-windows.ps1` e `test/config.test.js`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A alteração segura foi endurecer os helpers Windows para validar disponibilidade de comandos antes de executá-los: `scripts/test-windows.ps1` agora falha com mensagem clara se `node` ou `npm` não estiverem no PATH, e `scripts/start-windows.ps1` falha com mensagem clara se `node` não estiver no PATH. A documentação de validação local foi atualizada para registrar esse comportamento.
 
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `test/config.test.js`, `scripts/test-windows.ps1` e `scripts/start-windows.ps1`; issues abertas e PRs recentes foram consultados e não retornaram resultados; a busca textual não encontrou registros claros do Claude Agent. A alteração segura foi endurecer o parsing de `PORT` em `src/config.js`: agora a porta só é aceita dentro do intervalo TCP válido `1..65535`, caindo para `3131` em valores inválidos. `test/config.test.js` recebeu cobertura para portas válidas, inválidas e fallback.
+
 Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -50,6 +52,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Script PowerShell para início conservador no Windows, com checagem de raiz do repositório, disponibilidade de `node`, Node.js 20+, padrões locais explícitos e verificação leve do Ollama antes do start.
 - Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`, incluindo checagem de raiz do repositório, disponibilidade de `node`/`npm` e Node.js 20+.
 - Helpers Windows e CI fixam explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000`, além dos limites conservadores de fila, contexto, cache, rate limit, proxy e logs.
+- Configuração de `PORT` endurecida para aceitar somente portas TCP válidas entre `1` e `65535`, com fallback local seguro para `3131`.
 - Testes com `node --test` sem chamar Ollama.
 - CI leve com Node.js 20 e ambiente offline alinhado ao helper Windows para rate limit, proxy confiável desativado e logs silenciosos.
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves, integração de clientes, validação local e revisão de prontidão do MVP.
@@ -71,6 +74,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
 - `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
 - `src/rate-limit.js` agora expõe `trackedClients` no status público, preservando `activeClients` como alias de compatibilidade; `test/rate-limit.test.js` cobre essa compatibilidade.
+- `test/config.test.js` cobre normalização segura de `LOG_LEVEL`, flags booleanas e parsing de `PORT`.
 - Verificação operacional do commit `f45af224071e6b633954b199072b12d370546f4e` registrada: sem status/CI disponível pelo conector no momento da consulta, mantendo validação final como pendência explícita.
 
 ## Critérios parcialmente atendidos
@@ -82,6 +86,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Fila de geração: `src/generation-queue.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Logging: `src/logger.js` está integrado ao módulo `src/logger.js`; falta validação final por `npm test`/CI após a extração.
+- Configuração: `src/config.js` possui normalização de logs, flags booleanas e porta TCP, mas ainda precisa de validação final por `npm test`/CI após a alteração mais recente.
 - Validação local: existe guia documentado em `docs/local-validation.md` e helpers `npm run test:windows`/`npm run start:windows`, mas ainda é necessário executar `npm test`, `npm run test:windows` ou confirmar CI verde.
 - Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada; foi corrigida a compatibilidade do campo `trackedClients`, mas ainda precisa de validação por `npm test`/CI.
 - CI/status remoto: a CI agora possui ambiente de teste mais completo, mas ainda é necessário confirmar execução verde no commit mais recente.

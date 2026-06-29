@@ -34,6 +34,11 @@ function parseMinimumInteger(value, fallback, minimum) {
   return Math.max(minimum, parseInteger(value, fallback));
 }
 
+export function parsePort(value, fallback = 3131) {
+  const parsed = parseInteger(value, fallback);
+  return parsed >= 1 && parsed <= 65535 ? parsed : fallback;
+}
+
 export function parseBooleanFlag(value, defaultValue = true) {
   if (value === undefined || value === null || value === '') return defaultValue;
 
@@ -66,7 +71,7 @@ export function getAllowedFileExtensions(env = process.env) {
 export function loadConfig(env = process.env) {
   return {
     HOST: env.HOST || '127.0.0.1',
-    PORT: parseInteger(env.PORT || '3131', 3131),
+    PORT: parsePort(env.PORT || '3131', 3131),
     OLLAMA_URL: env.OLLAMA_URL || 'http://127.0.0.1:11434',
     MODEL: env.MODEL || 'qwen2.5-coder:1.5b-instruct',
     MAX_BODY_BYTES: parseInteger(env.MAX_BODY_BYTES || '65536', 65536),

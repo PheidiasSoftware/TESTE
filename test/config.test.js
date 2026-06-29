@@ -6,6 +6,7 @@ import {
   getAllowedFileExtensions,
   loadConfig,
   normalizeAllowedFileExtension,
+  normalizeHost,
   normalizeLogLevel,
   normalizeOllamaUrl,
   parseBooleanFlag,
@@ -27,6 +28,22 @@ test('loadConfig keeps conservative defaults for weak local PCs', () => {
   assert.equal(config.LOG_LEVEL, 'info');
   assert.equal(config.ENABLE_RATE_LIMIT, true);
   assert.equal(config.TRUST_PROXY, false);
+});
+
+test('normalizeHost keeps the backend bound to local interfaces by default', () => {
+  assert.equal(normalizeHost('127.0.0.1'), '127.0.0.1');
+  assert.equal(normalizeHost(' localhost '), 'localhost');
+  assert.equal(normalizeHost('::1'), '::1');
+  assert.equal(normalizeHost('[::1]'), '[::1]');
+  assert.equal(normalizeHost('0.0.0.0'), '127.0.0.1');
+  assert.equal(normalizeHost('192.168.0.10'), '127.0.0.1');
+  assert.equal(normalizeHost(''), '127.0.0.1');
+});
+
+test('loadConfig falls back to loopback when HOST asks for public binding', () => {
+  assert.equal(loadConfig({ HOST: 'localhost' }).HOST, 'localhost');
+  assert.equal(loadConfig({ HOST: '0.0.0.0' }).HOST, '127.0.0.1');
+  assert.equal(loadConfig({ HOST: '::' }).HOST, '127.0.0.1');
 });
 
 test('parseInteger accepts only complete safe integer environment values', () => {

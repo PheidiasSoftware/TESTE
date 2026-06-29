@@ -34,9 +34,15 @@ function parseMinimumInteger(value, fallback, minimum) {
   return Math.max(minimum, parseInteger(value, fallback));
 }
 
-function parseBooleanFlag(value, defaultValue = true) {
+export function parseBooleanFlag(value, defaultValue = true) {
   if (value === undefined || value === null || value === '') return defaultValue;
-  return value !== 'false';
+
+  const normalized = String(value).trim().toLowerCase();
+
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false;
+
+  return defaultValue;
 }
 
 export function normalizeLogLevel(value, fallback = 'info') {
@@ -79,7 +85,7 @@ export function loadConfig(env = process.env) {
     RATE_LIMIT_WINDOW_MS: parseMinimumInteger(env.RATE_LIMIT_WINDOW_MS || '60000', 60000, 1000),
     RATE_LIMIT_MAX_REQUESTS: parseMinimumInteger(env.RATE_LIMIT_MAX_REQUESTS || '30', 30, 1),
     RATE_LIMIT_MAX_CLIENTS: parseMinimumInteger(env.RATE_LIMIT_MAX_CLIENTS || '500', 500, 1),
-    TRUST_PROXY: env.TRUST_PROXY === 'true'
+    TRUST_PROXY: parseBooleanFlag(env.TRUST_PROXY, false)
   };
 }
 

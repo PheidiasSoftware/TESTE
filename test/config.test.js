@@ -5,7 +5,8 @@ import {
   DEFAULT_ALLOWED_FILE_EXTENSIONS,
   getAllowedFileExtensions,
   loadConfig,
-  normalizeLogLevel
+  normalizeLogLevel,
+  parseBooleanFlag
 } from '../src/config.js';
 
 test('loadConfig keeps conservative defaults for weak local PCs', () => {
@@ -58,6 +59,45 @@ test('normalizeLogLevel accepts only supported levels', () => {
   assert.equal(normalizeLogLevel('debug'), 'debug');
   assert.equal(normalizeLogLevel('silent'), 'silent');
   assert.equal(normalizeLogLevel('unsupported'), 'info');
+});
+
+test('parseBooleanFlag accepts common true and false environment values', () => {
+  for (const value of ['true', 'TRUE', ' 1 ', 'yes', 'Y', 'on']) {
+    assert.equal(parseBooleanFlag(value, false), true);
+  }
+
+  for (const value of ['false', 'FALSE', ' 0 ', 'no', 'N', 'off']) {
+    assert.equal(parseBooleanFlag(value, true), false);
+  }
+});
+
+test('parseBooleanFlag falls back for empty or unsupported environment values', () => {
+  assert.equal(parseBooleanFlag(undefined, true), true);
+  assert.equal(parseBooleanFlag('', false), false);
+  assert.equal(parseBooleanFlag('maybe', true), true);
+  assert.equal(parseBooleanFlag('maybe', false), false);
+});
+
+test('loadConfig applies boolean parsing to public safety flags', () => {
+  const disabled = loadConfig({
+    ENABLE_PROMPT_CACHE: '0',
+    ENABLE_RATE_LIMIT: 'off',
+    TRUST_PROXY: 'no'
+  });
+
+  assert.equal(disabled.ENABLE_PROMPT_CACHE, false);
+  assert.equal(disabled.ENABLE_RATE_LIMIT, false);
+  assert.equal(disabled.TRUST_PROXY, false);
+
+  const enabled = loadConfig({
+    ENABLE_PROMPT_CACHE: '1',
+    ENABLE_RATE_LIMIT: 'on',
+    TRUST_PROXY: 'yes'
+  });
+
+  assert.equal(enabled.ENABLE_PROMPT_CACHE, true);
+  assert.equal(enabled.ENABLE_RATE_LIMIT, true);
+  assert.equal(enabled.TRUST_PROXY, true);
 });
 
 test('getAllowedFileExtensions parses custom comma separated extensions', () => {

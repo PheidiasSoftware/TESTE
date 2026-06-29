@@ -4,8 +4,9 @@
 
 .DESCRIPTION
   Conservative validation helper for weak PCs with 8 GB RAM and no GPU.
-  It configures safe local defaults and runs npm test without starting Ollama,
-  downloading models, or executing generated code.
+  It checks that the command is being executed from the repository root,
+  verifies Node.js 20+, configures safe local defaults, and runs npm test
+  without starting Ollama, downloading models, or executing generated code.
 
 .NOTES
   Run from the repository root:
@@ -13,6 +14,21 @@
 #>
 
 $ErrorActionPreference = "Stop"
+
+if (-not (Test-Path -Path "package.json" -PathType Leaf)) {
+  throw "package.json not found. Run this script from the repository root."
+}
+
+if (-not (Test-Path -Path "src/server.js" -PathType Leaf)) {
+  throw "src/server.js not found. Run this script from the repository root."
+}
+
+$NodeVersionRaw = node -p "process.versions.node"
+$NodeMajorVersion = [int]($NodeVersionRaw.Split('.')[0])
+
+if ($NodeMajorVersion -lt 20) {
+  throw "Node.js 20+ is required. Current version: $NodeVersionRaw"
+}
 
 if (-not $env:HOST) { $env:HOST = "127.0.0.1" }
 if (-not $env:PORT) { $env:PORT = "3131" }
@@ -34,6 +50,7 @@ if (-not $env:LOG_LEVEL) { $env:LOG_LEVEL = "silent" }
 
 Write-Host "TESTE backend offline validation" -ForegroundColor Cyan
 Write-Host "Node tests only; Ollama/model execution is intentionally skipped."
+Write-Host "Node.js: $NodeVersionRaw"
 Write-Host "Host: $env:HOST"
 Write-Host "Port: $env:PORT"
 Write-Host "Model config: $env:MODEL"

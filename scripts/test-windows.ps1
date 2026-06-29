@@ -34,6 +34,8 @@ if (-not $env:HOST) { $env:HOST = "127.0.0.1" }
 if (-not $env:PORT) { $env:PORT = "3131" }
 if (-not $env:OLLAMA_URL) { $env:OLLAMA_URL = "http://127.0.0.1:11434" }
 if (-not $env:MODEL) { $env:MODEL = "qwen2.5-coder:1.5b-instruct" }
+if (-not $env:MAX_BODY_BYTES) { $env:MAX_BODY_BYTES = "65536" }
+if (-not $env:REQUEST_TIMEOUT_MS) { $env:REQUEST_TIMEOUT_MS = "120000" }
 if (-not $env:GENERATION_CONCURRENCY) { $env:GENERATION_CONCURRENCY = "1" }
 if (-not $env:MAX_QUEUE_SIZE) { $env:MAX_QUEUE_SIZE = "4" }
 if (-not $env:ENABLE_PROMPT_CACHE) { $env:ENABLE_PROMPT_CACHE = "true" }
@@ -54,6 +56,8 @@ Write-Host "Node.js: $NodeVersionRaw"
 Write-Host "Host: $env:HOST"
 Write-Host "Port: $env:PORT"
 Write-Host "Model config: $env:MODEL"
+Write-Host "Max body bytes: $env:MAX_BODY_BYTES"
+Write-Host "Request timeout ms: $env:REQUEST_TIMEOUT_MS"
 Write-Host "Generation concurrency: $env:GENERATION_CONCURRENCY"
 Write-Host "Max queue size: $env:MAX_QUEUE_SIZE"
 Write-Host "Max context files: $env:MAX_CONTEXT_FILES"

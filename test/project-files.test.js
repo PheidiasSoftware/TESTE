@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   buildContextFromFiles,
   readProjectFile,
+  truncateUtf8ToBytes,
   validateSafeProjectFilePath
 } from '../src/project-files.js';
 
@@ -76,6 +77,14 @@ test('readProjectFile lê arquivo pequeno e bloqueia arquivo acima do limite', a
   }
 });
 
+test('truncateUtf8ToBytes não divide caracteres multibyte', () => {
+  assert.equal(truncateUtf8ToBytes('abc', 2), 'ab');
+  assert.equal(truncateUtf8ToBytes('abç', 3), 'ab');
+  assert.equal(truncateUtf8ToBytes('😀teste', 3), '');
+  assert.equal(truncateUtf8ToBytes('😀teste', 4), '😀');
+  assert.equal(truncateUtf8ToBytes('ok', 10), 'ok');
+});
+
 test('buildContextFromFiles monta contexto controlado com arquivos textuais pequenos', async () => {
   const projectRoot = await mkdtemp(join(tmpdir(), 'teste-context-files-'));
 
@@ -102,6 +111,18 @@ test('buildContextFromFiles monta contexto controlado com arquivos textuais pequ
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
   }
+});
+
+test('buildContextFromFiles limita contexto manual sem quebrar UTF-8', async () => {
+  const result = await buildContextFromFiles({
+    context: '😀teste',
+    contextFiles: [],
+    maxContextBytes: 5
+  });
+
+  assert.equal(result.context, '😀t');
+  assert.equal(result.totalBytes, 5);
+  assert.equal(result.truncated, true);
 });
 
 test('buildContextFromFiles limita quantidade de arquivos e tipos inválidos', async () => {

@@ -30,7 +30,7 @@ No Windows, também é possível usar o helper conservador:
 npm run test:windows
 ```
 
-Esse comando executa `scripts/test-windows.ps1`, define padrões locais leves e roda apenas a suíte offline. Ele não inicia Ollama, não baixa modelos e não executa código gerado por usuário.
+Esse comando executa `scripts/test-windows.ps1`, confirma que o comando foi iniciado na raiz do repositório, valida Node.js 20+, define padrões locais leves e roda apenas a suíte offline. Ele não inicia Ollama, não baixa modelos e não executa código gerado por usuário.
 
 O teste usa o runner nativo do Node.js e cobre:
 

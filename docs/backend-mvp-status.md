@@ -20,6 +20,8 @@ Em nova execução de 2026-06-29, o repositório foi reexaminado antes de altera
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado novamente antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `test/server.test.js` e `scripts/start-windows.ps1`. Não havia PRs recentes pelo conector. A decisão segura foi adicionar uma validação offline para Windows: `scripts/test-windows.ps1`, comando `npm run test:windows` e documentação correspondente. O script apenas roda a suíte offline com variáveis conservadoras; não chama Ollama, não baixa modelos e não executa código gerado.
 
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1` e `scripts/start-windows.ps1`. O conector não retornou PRs recentes e não foram encontrados registros claros do Claude Agent pela busca disponível. Como o checkout local continuou bloqueado, a decisão segura foi endurecer somente a validação offline Windows: `scripts/test-windows.ps1` agora verifica execução na raiz do repositório e Node.js 20+ antes de rodar `npm test`. `docs/local-validation.md` foi atualizado para refletir esse comportamento.
+
 Até essa confirmação, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -38,7 +40,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Rate limit local em memória nas rotas pesadas.
 - Logs estruturados em JSON Lines com redaction de campos sensíveis.
 - Script PowerShell para início conservador no Windows.
-- Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`.
+- Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`, incluindo checagem de raiz do repositório e Node.js 20+.
 - Testes com `node --test` sem chamar Ollama.
 - CI leve com Node.js 20.
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves, integração de clientes, validação local e revisão de prontidão do MVP.
@@ -54,7 +56,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - `src/server.js` integrado ao módulo `src/logger.js`, mantendo reexports para compatibilidade com testes e uso técnico futuro.
 - Guia `docs/local-validation.md` criado para validação mínima sem Ollama, health/status, entrada inválida, leitura segura, teste opcional com Ollama e checklist antes de novas mudanças no backend.
 - Guia `docs/local-validation.md` ampliado com validação por CI leve, critérios mínimos para continuar refatorando `src/server.js` e orientação para tratar ausência de checks como ausência de evidência, não como falha.
-- Guia `docs/local-validation.md` atualizado com `npm run test:windows` como alternativa Windows para validação offline.
+- Guia `docs/local-validation.md` atualizado com `npm run test:windows` como alternativa Windows para validação offline, incluindo checagem de raiz do repositório e Node.js 20+.
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
 - `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
 - `src/rate-limit.js` agora expõe `trackedClients` no status público, preservando `activeClients` como alias de compatibilidade; `test/rate-limit.test.js` cobre essa compatibilidade.

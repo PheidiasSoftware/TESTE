@@ -26,8 +26,10 @@ export const LOG_LEVEL_PRIORITY = {
 export const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content)/i;
 
 const DEFAULT_HOST = '127.0.0.1';
+const DEFAULT_MODEL = 'qwen2.5-coder:1.5b-instruct';
 const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
 const ALLOWED_LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+const MODEL_NAME_PATTERN = /^[a-z0-9][a-z0-9._/-]{0,119}(?::[a-z0-9][a-z0-9._-]{0,63})?$/i;
 
 export function parseInteger(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -68,6 +70,14 @@ export function normalizeOllamaUrl(value, fallback = DEFAULT_OLLAMA_URL) {
   } catch {
     return fallback;
   }
+}
+
+export function normalizeModelName(value, fallback = DEFAULT_MODEL) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return fallback;
+  if (normalized.length > 180) return fallback;
+
+  return MODEL_NAME_PATTERN.test(normalized) ? normalized : fallback;
 }
 
 export function parseBooleanFlag(value, defaultValue = true) {
@@ -117,7 +127,7 @@ export function loadConfig(env = process.env) {
     HOST: normalizeHost(env.HOST),
     PORT: parsePort(env.PORT || '3131', 3131),
     OLLAMA_URL: normalizeOllamaUrl(env.OLLAMA_URL),
-    MODEL: env.MODEL || 'qwen2.5-coder:1.5b-instruct',
+    MODEL: normalizeModelName(env.MODEL),
     MAX_BODY_BYTES: parseInteger(env.MAX_BODY_BYTES || '65536', 65536),
     REQUEST_TIMEOUT_MS: parseInteger(env.REQUEST_TIMEOUT_MS || '120000', 120000),
     MAX_QUEUE_SIZE: parseInteger(env.MAX_QUEUE_SIZE || '4', 4),

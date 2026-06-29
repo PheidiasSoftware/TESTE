@@ -22,7 +22,9 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado novamente 
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1` e `scripts/start-windows.ps1`. O conector não retornou PRs recentes e não foram encontrados registros claros do Claude Agent pela busca disponível. Como o checkout local continuou bloqueado, a decisão segura foi endurecer somente a validação offline Windows: `scripts/test-windows.ps1` agora verifica execução na raiz do repositório e Node.js 20+ antes de rodar `npm test`. `docs/local-validation.md` foi atualizado para refletir esse comportamento.
 
-Até essa confirmação, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js` e `scripts/test-windows.ps1`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A tentativa de checkout local foi bloqueada pelo ambiente, então a alteração segura foi alinhar `.github/workflows/node-test.yml` aos padrões conservadores do helper Windows, adicionando `ENABLE_RATE_LIMIT`, `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_MAX_CLIENTS`, `TRUST_PROXY` e `LOG_LEVEL=silent` ao ambiente de teste offline da CI.
+
+Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
 
@@ -42,7 +44,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Script PowerShell para início conservador no Windows.
 - Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`, incluindo checagem de raiz do repositório e Node.js 20+.
 - Testes com `node --test` sem chamar Ollama.
-- CI leve com Node.js 20.
+- CI leve com Node.js 20 e ambiente offline alinhado ao helper Windows para rate limit, proxy confiável desativado e logs silenciosos.
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves, integração de clientes, validação local e revisão de prontidão do MVP.
 - README principal com links para arquitetura, contrato da API, status do MVP, revisão de prontidão, streaming, rate limit, seleção de modelos, integração de clientes e validação local.
 - Helpers de cliente Ollama em `src/ollama.js` para montagem de payload, parse de JSONL streaming, chamada não-streaming e leitura de stream, com testes isolados por `fetchImpl` fake.
@@ -73,7 +75,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Logging: `src/logger.js` está integrado ao módulo `src/logger.js`; falta validação final por `npm test`/CI após a extração.
 - Validação local: existe guia documentado em `docs/local-validation.md` e helper `npm run test:windows`, mas ainda é necessário executar `npm test`, `npm run test:windows` ou confirmar CI verde.
 - Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada; foi corrigida a compatibilidade do campo `trackedClients`, mas ainda precisa de validação por `npm test`/CI.
-- CI/status remoto: o conector GitHub não retornou checks nem workflow runs para o commit consultado anteriormente; isso não confirma falha, apenas ausência de evidência de execução.
+- CI/status remoto: a CI agora possui ambiente de teste mais completo, mas ainda é necessário confirmar execução verde no commit mais recente.
 
 ## Não faz parte do MVP backend
 
@@ -90,14 +92,14 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - `src/server.js` ainda tem responsabilidade alta; alterações grandes nesse arquivo aumentam risco de regressão.
 - A validação final de `npm test` depende de execução local ou CI, pois o conector GitHub não executa os testes diretamente.
 - O ambiente usado nas últimas execuções bloqueou checkout local do repositório, então não houve como executar `npm test` fora do GitHub Actions.
-- O commit consultado anteriormente não possuía status/checks disponíveis pelo conector, então ainda não existe evidência objetiva de CI verde.
+- Ainda não existe evidência objetiva de CI verde para o commit mais recente desta execução.
 - Uso real depende do Ollama instalado, rodando e com modelo leve disponível.
 - Em CPU fraca, respostas podem ser lentas; os limites padrão devem continuar conservadores.
 
 ## Próximas tarefas seguras recomendadas
 
-1. Executar o checklist de `docs/local-validation.md`, começando por `npm test` ou `npm run test:windows` sem Ollama.
-2. Confirmar CI verde no GitHub Actions após as integrações recentes e a correção de contrato de `rateLimit.trackedClients`.
+1. Confirmar CI verde no GitHub Actions para o commit mais recente.
+2. Executar o checklist de `docs/local-validation.md`, começando por `npm test` ou `npm run test:windows` sem Ollama.
 3. Se testes/CI estiverem verdes, registrar o backend como MVP funcional completo.
 4. Só depois disso extrair roteamento/handlers para módulo dedicado, em alteração pequena.
 5. Em seguida, tratar melhorias adicionais como hardening pós-MVP, não como requisito para o MVP inicial.

@@ -52,6 +52,8 @@ No Windows, prefira:
 npm run start:windows
 ```
 
+Esse comando executa `scripts/start-windows.ps1`, confirma que foi iniciado na raiz do repositório, valida Node.js 20+, aplica padrões locais conservadores quando as variáveis não foram definidas, verifica se o Ollama responde em `OLLAMA_URL` e só então inicia `node src/server.js`.
+
 Ou, em qualquer sistema:
 
 ```powershell
@@ -190,6 +192,7 @@ Se a CI não aparecer para um commit, trate como ausência de evidência, não c
 Antes de modularizar mais o `src/server.js`, confirme:
 
 - `npm test` ou `npm run test:windows` passa localmente;
+- `npm run start:windows` inicia o backend no Windows com Node.js 20+;
 - `GET /health` responde;
 - `GET /api/status` responde;
 - payload inválido em `/api/generate` retorna 400;

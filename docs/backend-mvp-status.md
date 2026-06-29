@@ -28,6 +28,8 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1`, `scripts/start-windows.ps1` e `test/config.test.js`; issues e PRs abertos foram consultados e não retornaram resultados; a busca por registros claros de Claude Agent também não retornou resultados. A alteração segura foi alinhar explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000` nos helpers Windows e na CI, reduzindo variação operacional entre teste offline, start local e workflow remoto sem mexer no roteamento do backend.
 
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1`, `scripts/start-windows.ps1` e `test/config.test.js`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A alteração segura foi endurecer os helpers Windows para validar disponibilidade de comandos antes de executá-los: `scripts/test-windows.ps1` agora falha com mensagem clara se `node` ou `npm` não estiverem no PATH, e `scripts/start-windows.ps1` falha com mensagem clara se `node` não estiver no PATH. A documentação de validação local foi atualizada para registrar esse comportamento.
+
 Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -45,9 +47,9 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - `contextFiles` em `/api/generate` reutilizando a leitura segura.
 - Rate limit local em memória nas rotas pesadas.
 - Logs estruturados em JSON Lines com redaction de campos sensíveis.
-- Script PowerShell para início conservador no Windows, com checagem de raiz do repositório, Node.js 20+, padrões locais explícitos e verificação leve do Ollama antes do start.
-- Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`, incluindo checagem de raiz do repositório e Node.js 20+.
-- Helpers Windows e CI agora fixam explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000`, além dos limites conservadores de fila, contexto, cache, rate limit, proxy e logs.
+- Script PowerShell para início conservador no Windows, com checagem de raiz do repositório, disponibilidade de `node`, Node.js 20+, padrões locais explícitos e verificação leve do Ollama antes do start.
+- Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`, incluindo checagem de raiz do repositório, disponibilidade de `node`/`npm` e Node.js 20+.
+- Helpers Windows e CI fixam explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000`, além dos limites conservadores de fila, contexto, cache, rate limit, proxy e logs.
 - Testes com `node --test` sem chamar Ollama.
 - CI leve com Node.js 20 e ambiente offline alinhado ao helper Windows para rate limit, proxy confiável desativado e logs silenciosos.
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves, integração de clientes, validação local e revisão de prontidão do MVP.
@@ -63,8 +65,8 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - `src/server.js` integrado ao módulo `src/logger.js`, mantendo reexports para compatibilidade com testes e uso técnico futuro.
 - Guia `docs/local-validation.md` criado para validação mínima sem Ollama, health/status, entrada inválida, leitura segura, teste opcional com Ollama e checklist antes de novas mudanças no backend.
 - Guia `docs/local-validation.md` ampliado com validação por CI leve, critérios mínimos para continuar refatorando `src/server.js` e orientação para tratar ausência de checks como ausência de evidência, não como falha.
-- Guia `docs/local-validation.md` atualizado com `npm run test:windows` como alternativa Windows para validação offline, incluindo checagem de raiz do repositório e Node.js 20+.
-- Guia `docs/local-validation.md` atualizado com o comportamento endurecido de `npm run start:windows`, incluindo checagem de raiz do repositório, Node.js 20+ e padrões explícitos antes do start.
+- Guia `docs/local-validation.md` atualizado com `npm run test:windows` como alternativa Windows para validação offline, incluindo checagem de raiz do repositório, disponibilidade de `node`/`npm` e Node.js 20+.
+- Guia `docs/local-validation.md` atualizado com o comportamento endurecido de `npm run start:windows`, incluindo checagem de raiz do repositório, disponibilidade de `node`, Node.js 20+ e padrões explícitos antes do start.
 - Guia `docs/local-validation.md` atualizado com alinhamento explícito de limites de payload e timeout entre CI, `npm run test:windows` e `npm run start:windows`.
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
 - `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.

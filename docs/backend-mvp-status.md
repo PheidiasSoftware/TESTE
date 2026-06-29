@@ -26,8 +26,8 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 - Script PowerShell para início conservador no Windows.
 - Testes com `node --test` sem chamar Ollama.
 - CI leve com Node.js 20.
-- Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves e integração de clientes.
-- README principal com links para arquitetura, contrato da API, status do MVP, streaming, rate limit, seleção de modelos e integração de clientes.
+- Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves, integração de clientes e validação local.
+- README principal com links para arquitetura, contrato da API, status do MVP, streaming, rate limit, seleção de modelos, integração de clientes e validação local.
 - Helpers de cliente Ollama em `src/ollama.js` para montagem de payload, parse de JSONL streaming, chamada não-streaming e leitura de stream, com testes isolados por `fetchImpl` fake.
 - `src/server.js` integrado ao cliente Ollama de `src/ollama.js`, removendo duplicação direta de payload/parsing de streaming no servidor.
 - `src/server.js` integrado aos helpers HTTP de `src/http.js` para JSON, SSE e leitura de corpo com `MAX_BODY_BYTES`, reduzindo duplicação local.
@@ -37,6 +37,7 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 - `src/server.js` integrado ao módulo `src/project-files.js`, mantendo reexports para compatibilidade com testes existentes.
 - Logging estruturado extraído para `src/logger.js`, com testes próprios para redaction, truncamento conservador, níveis de log e modo `silent`.
 - `src/server.js` integrado ao módulo `src/logger.js`, mantendo reexports para compatibilidade com testes e uso técnico futuro.
+- Guia `docs/local-validation.md` criado para validação mínima sem Ollama, health/status, entrada inválida, leitura segura, teste opcional com Ollama e checklist antes de novas mudanças no backend.
 
 ## Critérios parcialmente atendidos
 
@@ -47,6 +48,7 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 - Fila de geração: `src/generation-queue.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Logging: `src/logger.js` está integrado ao servidor; falta validação final por `npm test`/CI após a extração.
+- Validação local: existe guia documentado em `docs/local-validation.md`, mas ainda é necessário executar `npm test` localmente ou confirmar CI verde.
 
 ## Não faz parte do MVP backend
 
@@ -67,10 +69,11 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 
 ## Próximas tarefas seguras recomendadas
 
-1. Validar CI ou executar `npm test` localmente após integração de `src/http.js`, `src/ollama.js`, `src/generation-queue.js`, `src/project-files.js` e `src/logger.js`.
-2. Extrair roteamento/handlers para módulo dedicado somente se a validação estiver verde, pois essa mudança toca o fluxo HTTP principal.
-3. Depois da modularização, revisar se o backend atende formalmente ao MVP e registrar decisão.
+1. Executar o checklist de `docs/local-validation.md`, começando por `npm test` sem Ollama.
+2. Confirmar CI verde no GitHub Actions após as integrações recentes.
+3. Extrair roteamento/handlers para módulo dedicado somente se a validação estiver verde, pois essa mudança toca o fluxo HTTP principal.
+4. Depois da modularização ou da confirmação de testes verdes, revisar se o backend atende formalmente ao MVP e registrar decisão.
 
 ## Decisão operacional
 
-O backend está muito próximo do MVP funcional. A prioridade agora não deve ser adicionar recursos grandes, mas reduzir risco técnico, manter contrato de API explícito para clientes locais e integrar gradualmente os módulos auxiliares já criados.
+O backend está muito próximo do MVP funcional. A prioridade agora não deve ser adicionar recursos grandes, mas reduzir risco técnico, manter contrato de API explícito para clientes locais, validar as extrações recentes e integrar gradualmente os módulos auxiliares já criados.

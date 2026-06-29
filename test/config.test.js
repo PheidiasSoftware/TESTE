@@ -6,6 +6,7 @@ import {
   getAllowedFileExtensions,
   loadConfig,
   normalizeLogLevel,
+  normalizeOllamaUrl,
   parseBooleanFlag,
   parsePort
 } from '../src/config.js';
@@ -15,6 +16,7 @@ test('loadConfig keeps conservative defaults for weak local PCs', () => {
 
   assert.equal(config.HOST, '127.0.0.1');
   assert.equal(config.PORT, 3131);
+  assert.equal(config.OLLAMA_URL, 'http://127.0.0.1:11434');
   assert.equal(config.MODEL, 'qwen2.5-coder:1.5b-instruct');
   assert.equal(config.GENERATION_CONCURRENCY, 1);
   assert.equal(config.MAX_QUEUE_SIZE, 4);
@@ -38,6 +40,25 @@ test('parsePort accepts only valid TCP port range values', () => {
   assert.equal(parsePort('65535'), 65535);
   assert.equal(parsePort('65536'), 3131);
   assert.equal(parsePort(undefined, 8080), 8080);
+});
+
+test('normalizeOllamaUrl accepts http and https URLs only', () => {
+  assert.equal(normalizeOllamaUrl(' http://localhost:11434/ '), 'http://localhost:11434');
+  assert.equal(normalizeOllamaUrl('https://ollama.local:11434/api/'), 'https://ollama.local:11434/api');
+  assert.equal(normalizeOllamaUrl('ftp://127.0.0.1:11434'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('not a url'), 'http://127.0.0.1:11434');
+});
+
+test('normalizeOllamaUrl strips query and hash fragments before exposing config', () => {
+  assert.equal(
+    normalizeOllamaUrl('http://127.0.0.1:11434/?token=secret#section'),
+    'http://127.0.0.1:11434'
+  );
+});
+
+test('loadConfig normalizes Ollama URL to a safe endpoint string', () => {
+  assert.equal(loadConfig({ OLLAMA_URL: ' http://127.0.0.1:11434/// ' }).OLLAMA_URL, 'http://127.0.0.1:11434');
+  assert.equal(loadConfig({ OLLAMA_URL: 'file:///tmp/ollama.sock' }).OLLAMA_URL, 'http://127.0.0.1:11434');
 });
 
 test('loadConfig normalizes minimum values for safety limits', () => {

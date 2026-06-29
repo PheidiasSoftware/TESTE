@@ -27,9 +27,14 @@ export const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secre
 
 const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
 
-function parseInteger(value, fallback) {
-  const parsed = Number.parseInt(String(value), 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
+export function parseInteger(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+
+  const normalized = String(value).trim();
+  if (!/^[+-]?\d+$/.test(normalized)) return fallback;
+
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : fallback;
 }
 
 function parseMinimumInteger(value, fallback, minimum) {

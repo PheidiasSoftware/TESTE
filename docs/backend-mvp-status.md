@@ -34,6 +34,8 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `src/server.js`, `src/config.js`, `src/ollama.js`, `test/config.test.js` e `scripts/start-windows.ps1`; PRs recentes foram consultados, sem resultados; a busca textual não encontrou registros claros do Claude Agent. A alteração segura foi endurecer `OLLAMA_URL` em `src/config.js`: agora a URL é normalizada, aceita apenas `http`/`https`, remove query/hash e barras finais e retorna para `http://127.0.0.1:11434` em valores inválidos. `test/config.test.js` recebeu cobertura para esse parsing.
 
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `src/server.js`, `src/http.js`, `src/config.js`, `test/http.test.js` e `test/config.test.js`; issues e PRs abertos foram consultados e não retornaram resultados; a busca textual não encontrou registros claros do Claude Agent. A alteração segura foi endurecer `parseInteger` em `src/config.js` para aceitar somente inteiros completos e seguros, evitando que valores parciais como `65536x`, decimais ou notação científica sejam aceitos silenciosamente em limites de ambiente. `test/config.test.js` recebeu cobertura dedicada.
+
 Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -56,6 +58,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Helpers Windows e CI fixam explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000`, além dos limites conservadores de fila, contexto, cache, rate limit, proxy e logs.
 - Configuração de `PORT` endurecida para aceitar somente portas TCP válidas entre `1` e `65535`, com fallback local seguro para `3131`.
 - Configuração de `OLLAMA_URL` endurecida para aceitar somente URLs `http`/`https`, remover query/hash/barras finais e usar fallback local seguro em valores inválidos.
+- Parsing de inteiros de ambiente endurecido para aceitar apenas inteiros completos e seguros, reduzindo risco de configuração ambígua em limites de payload, timeout, fila, cache, contexto e rate limit.
 - Testes com `node --test` sem chamar Ollama.
 - CI leve com Node.js 20 e ambiente offline alinhado ao helper Windows para rate limit, proxy confiável desativado e logs silenciosos.
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves, integração de clientes, validação local e revisão de prontidão do MVP.
@@ -77,7 +80,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
 - `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
 - `src/rate-limit.js` agora expõe `trackedClients` no status público, preservando `activeClients` como alias de compatibilidade; `test/rate-limit.test.js` cobre essa compatibilidade.
-- `test/config.test.js` cobre normalização segura de `LOG_LEVEL`, flags booleanas, parsing de `PORT` e normalização segura de `OLLAMA_URL`.
+- `test/config.test.js` cobre normalização segura de `LOG_LEVEL`, flags booleanas, parsing de `PORT`, normalização segura de `OLLAMA_URL` e parsing estrito de inteiros de ambiente.
 - Verificação operacional do commit `f45af224071e6b633954b199072b12d370546f4e` registrada: sem status/CI disponível pelo conector no momento da consulta, mantendo validação final como pendência explícita.
 
 ## Critérios parcialmente atendidos
@@ -89,7 +92,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Fila de geração: `src/generation-queue.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Logging: `src/logger.js` está integrado ao módulo `src/logger.js`; falta validação final por `npm test`/CI após a extração.
-- Configuração: `src/config.js` possui normalização de logs, flags booleanas, porta TCP e URL do Ollama, mas ainda precisa de validação final por `npm test`/CI após a alteração mais recente.
+- Configuração: `src/config.js` possui normalização de logs, flags booleanas, porta TCP, URL do Ollama e parsing estrito de inteiros, mas ainda precisa de validação final por `npm test`/CI após a alteração mais recente.
 - Validação local: existe guia documentado em `docs/local-validation.md` e helpers `npm run test:windows`/`npm run start:windows`, mas ainda é necessário executar `npm test`, `npm run test:windows` ou confirmar CI verde.
 - Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada; foi corrigida a compatibilidade do campo `trackedClients`, mas ainda precisa de validação por `npm test`/CI.
 - CI/status remoto: a CI agora possui ambiente de teste mais completo, mas ainda é necessário confirmar execução verde no commit mais recente.

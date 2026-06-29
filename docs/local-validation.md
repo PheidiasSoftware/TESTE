@@ -24,6 +24,14 @@ Esta etapa deve funcionar mesmo sem modelo instalado.
 npm test
 ```
 
+No Windows, também é possível usar o helper conservador:
+
+```powershell
+npm run test:windows
+```
+
+Esse comando executa `scripts/test-windows.ps1`, define padrões locais leves e roda apenas a suíte offline. Ele não inicia Ollama, não baixa modelos e não executa código gerado por usuário.
+
 O teste usa o runner nativo do Node.js e cobre:
 
 - montagem de prompt técnico;
@@ -181,7 +189,7 @@ Se a CI não aparecer para um commit, trate como ausência de evidência, não c
 
 Antes de modularizar mais o `src/server.js`, confirme:
 
-- `npm test` passa localmente;
+- `npm test` ou `npm run test:windows` passa localmente;
 - `GET /health` responde;
 - `GET /api/status` responde;
 - payload inválido em `/api/generate` retorna 400;

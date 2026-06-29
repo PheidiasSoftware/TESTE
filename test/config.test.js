@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import {
   DEFAULT_ALLOWED_FILE_EXTENSIONS,
   getAllowedFileExtensions,
-  loadConfig
+  loadConfig,
+  normalizeLogLevel
 } from '../src/config.js';
 
 test('loadConfig keeps conservative defaults for weak local PCs', () => {
@@ -17,6 +18,7 @@ test('loadConfig keeps conservative defaults for weak local PCs', () => {
   assert.equal(config.MAX_QUEUE_SIZE, 4);
   assert.equal(config.ENABLE_PROMPT_CACHE, true);
   assert.equal(config.MAX_CACHE_ENTRIES, 20);
+  assert.equal(config.LOG_LEVEL, 'info');
   assert.equal(config.ENABLE_RATE_LIMIT, true);
   assert.equal(config.TRUST_PROXY, false);
 });
@@ -41,6 +43,21 @@ test('loadConfig normalizes minimum values for safety limits', () => {
   assert.equal(config.RATE_LIMIT_WINDOW_MS, 1000);
   assert.equal(config.RATE_LIMIT_MAX_REQUESTS, 1);
   assert.equal(config.RATE_LIMIT_MAX_CLIENTS, 1);
+});
+
+test('loadConfig normalizes supported log levels before exposing config status', () => {
+  assert.equal(loadConfig({ LOG_LEVEL: ' DEBUG ' }).LOG_LEVEL, 'debug');
+  assert.equal(loadConfig({ LOG_LEVEL: 'SILENT' }).LOG_LEVEL, 'silent');
+  assert.equal(loadConfig({ LOG_LEVEL: 'verbose' }).LOG_LEVEL, 'info');
+});
+
+test('normalizeLogLevel accepts only supported levels', () => {
+  assert.equal(normalizeLogLevel('error'), 'error');
+  assert.equal(normalizeLogLevel('warn'), 'warn');
+  assert.equal(normalizeLogLevel('info'), 'info');
+  assert.equal(normalizeLogLevel('debug'), 'debug');
+  assert.equal(normalizeLogLevel('silent'), 'silent');
+  assert.equal(normalizeLogLevel('unsupported'), 'info');
 });
 
 test('getAllowedFileExtensions parses custom comma separated extensions', () => {

@@ -14,6 +14,8 @@ Em 2026-06-29, foi criada a revisão `docs/mvp-readiness-review.md`.
 
 A avaliação técnica é que o backend atende aos critérios funcionais do MVP por implementação e documentação. A única pendência antes de declarar estabilidade é confirmar `npm test` localmente ou CI verde após as extrações recentes.
 
+Em nova verificação de 2026-06-29, o último commit conhecido `f45af224071e6b633954b199072b12d370546f4e` foi consultado pelo conector GitHub. O status combinado retornou sem checks registrados e a busca de workflow runs para o commit não retornou execuções, então a validação final continua pendente. Por segurança, não foi feita nova alteração em `src/server.js` nesta execução.
+
 Até essa confirmação, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -49,6 +51,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
 - `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
 - `src/rate-limit.js` agora expõe `trackedClients` no status público, preservando `activeClients` como alias de compatibilidade; `test/rate-limit.test.js` cobre essa compatibilidade.
+- Verificação operacional do commit `f45af224071e6b633954b199072b12d370546f4e` registrada: sem status/CI disponível pelo conector no momento da consulta, mantendo validação final como pendência explícita.
 
 ## Critérios parcialmente atendidos
 
@@ -61,6 +64,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Logging: `src/logger.js` está integrado ao servidor; falta validação final por `npm test`/CI após a extração.
 - Validação local: existe guia documentado em `docs/local-validation.md`, mas ainda é necessário executar `npm test` localmente ou confirmar CI verde.
 - Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada; nesta execução foi corrigida a compatibilidade do campo `trackedClients`, mas ainda precisa de validação por `npm test`/CI.
+- CI/status remoto: o conector GitHub não retornou checks nem workflow runs para o último commit conhecido nesta verificação; isso não confirma falha, apenas ausência de evidência de execução.
 
 ## Não faz parte do MVP backend
 
@@ -76,6 +80,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 
 - `src/server.js` ainda tem responsabilidade alta; alterações grandes nesse arquivo aumentam risco de regressão.
 - A validação final de `npm test` depende de execução local ou CI, pois o conector GitHub não executa os testes diretamente.
+- O último commit consultado não possui status/checks disponíveis pelo conector nesta verificação, então ainda não existe evidência objetiva de CI verde.
 - Uso real depende do Ollama instalado, rodando e com modelo leve disponível.
 - Em CPU fraca, respostas podem ser lentas; os limites padrão devem continuar conservadores.
 

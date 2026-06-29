@@ -107,6 +107,7 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 - [Rate limit local](docs/rate-limit.md)
 - [Seleção de modelos leves](docs/model-selection.md)
 - [Integração de clientes locais](docs/client-integration.md)
+- [Validação local do backend](docs/local-validation.md)
 
 ## Variáveis de ambiente
 

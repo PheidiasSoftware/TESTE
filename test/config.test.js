@@ -6,7 +6,8 @@ import {
   getAllowedFileExtensions,
   loadConfig,
   normalizeLogLevel,
-  parseBooleanFlag
+  parseBooleanFlag,
+  parsePort
 } from '../src/config.js';
 
 test('loadConfig keeps conservative defaults for weak local PCs', () => {
@@ -22,6 +23,21 @@ test('loadConfig keeps conservative defaults for weak local PCs', () => {
   assert.equal(config.LOG_LEVEL, 'info');
   assert.equal(config.ENABLE_RATE_LIMIT, true);
   assert.equal(config.TRUST_PROXY, false);
+});
+
+test('loadConfig normalizes invalid port values to the safe local default', () => {
+  assert.equal(loadConfig({ PORT: '3132' }).PORT, 3132);
+  assert.equal(loadConfig({ PORT: '0' }).PORT, 3131);
+  assert.equal(loadConfig({ PORT: '-1' }).PORT, 3131);
+  assert.equal(loadConfig({ PORT: '70000' }).PORT, 3131);
+  assert.equal(loadConfig({ PORT: 'abc' }).PORT, 3131);
+});
+
+test('parsePort accepts only valid TCP port range values', () => {
+  assert.equal(parsePort('1'), 1);
+  assert.equal(parsePort('65535'), 65535);
+  assert.equal(parsePort('65536'), 3131);
+  assert.equal(parsePort(undefined, 8080), 8080);
 });
 
 test('loadConfig normalizes minimum values for safety limits', () => {

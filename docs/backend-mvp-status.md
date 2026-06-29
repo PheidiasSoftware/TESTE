@@ -48,6 +48,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Guia `docs/local-validation.md` criado para validação mínima sem Ollama, health/status, entrada inválida, leitura segura, teste opcional com Ollama e checklist antes de novas mudanças no backend.
 - Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
 - `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
+- `src/rate-limit.js` agora expõe `trackedClients` no status público, preservando `activeClients` como alias de compatibilidade; `test/rate-limit.test.js` cobre essa compatibilidade.
 
 ## Critérios parcialmente atendidos
 
@@ -59,7 +60,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 - Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 - Logging: `src/logger.js` está integrado ao servidor; falta validação final por `npm test`/CI após a extração.
 - Validação local: existe guia documentado em `docs/local-validation.md`, mas ainda é necessário executar `npm test` localmente ou confirmar CI verde.
-- Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada, mas ainda precisa de validação por `npm test`/CI.
+- Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada; nesta execução foi corrigida a compatibilidade do campo `trackedClients`, mas ainda precisa de validação por `npm test`/CI.
 
 ## Não faz parte do MVP backend
 
@@ -81,7 +82,7 @@ Até essa confirmação, a recomendação é não adicionar recursos grandes nem
 ## Próximas tarefas seguras recomendadas
 
 1. Executar o checklist de `docs/local-validation.md`, começando por `npm test` sem Ollama.
-2. Confirmar CI verde no GitHub Actions após as integrações recentes.
+2. Confirmar CI verde no GitHub Actions após as integrações recentes e a correção de contrato de `rateLimit.trackedClients`.
 3. Se testes/CI estiverem verdes, registrar o backend como MVP funcional completo.
 4. Só depois disso extrair roteamento/handlers para módulo dedicado, em alteração pequena.
 5. Em seguida, tratar melhorias adicionais como hardening pós-MVP, não como requisito para o MVP inicial.

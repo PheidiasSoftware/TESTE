@@ -33,14 +33,17 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 - `src/server.js` integrado aos helpers HTTP de `src/http.js` para JSON, SSE e leitura de corpo com `MAX_BODY_BYTES`, reduzindo duplicação local.
 - Fila de geração extraída para `src/generation-queue.js`, com testes próprios para limite de fila, concorrência conservadora, falhas, configuração inválida e job inválido.
 - `src/server.js` integrado ao módulo `src/generation-queue.js`, mantendo reexport para compatibilidade com testes existentes.
+- Leitura segura de arquivos e montagem de contexto extraídas para `src/project-files.js`, com testes próprios para caminho seguro, bloqueios, limite de tamanho, contexto por arquivos e entradas inválidas.
+- `src/server.js` integrado ao módulo `src/project-files.js`, mantendo reexports para compatibilidade com testes existentes.
 
 ## Critérios parcialmente atendidos
 
-- Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js`, `src/ollama.js`, `src/cache.js` e `src/generation-queue.js`, mas `src/server.js` ainda concentra roteamento e leitura segura de arquivos.
+- Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js`, `src/ollama.js`, `src/cache.js`, `src/generation-queue.js` e `src/project-files.js`, mas `src/server.js` ainda concentra roteamento, handlers HTTP, logging e composição de resposta.
 - Cliente Ollama: `src/ollama.js` está integrado ao servidor; falta apenas validação final por `npm test`/CI após a alteração.
 - Helpers HTTP: `src/http.js` está integrado ao servidor; falta apenas validação final por `npm test`/CI após a alteração.
 - Cache: `src/cache.js` está integrado ao servidor e mantém testes próprios; manter este item sob observação apenas para validação de CI/local após mudanças no `src/server.js`.
 - Fila de geração: `src/generation-queue.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
+- Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
 
 ## Não faz parte do MVP backend
 
@@ -61,8 +64,8 @@ O backend não deve executar automaticamente código informado pelo usuário ou 
 
 ## Próximas tarefas seguras recomendadas
 
-1. Validar CI ou executar `npm test` localmente após integração de `src/http.js`, `src/ollama.js` e `src/generation-queue.js`.
-2. Extrair leitura segura para `src/project-files.js` com testes próprios.
+1. Validar CI ou executar `npm test` localmente após integração de `src/http.js`, `src/ollama.js`, `src/generation-queue.js` e `src/project-files.js`.
+2. Extrair logging para `src/logger.js` com testes próprios e manter reexport pelo servidor, sem alterar formato dos logs.
 3. Depois da modularização, revisar se o backend atende formalmente ao MVP e registrar decisão.
 
 ## Decisão operacional

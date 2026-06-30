@@ -286,6 +286,21 @@ async function handleReadFile(request, response) {
 }
 
 const ROUTES = ['GET /health', 'GET /api/status', 'POST /api/generate', 'POST /api/generate-stream', 'POST /api/read-file'];
+const ROUTE_METHODS = new Map([
+  ['/health', ['GET']],
+  ['/api/status', ['GET']],
+  ['/api/generate', ['POST']],
+  ['/api/generate-stream', ['POST']],
+  ['/api/read-file', ['POST']]
+]);
+
+function sendMethodNotAllowed(response, allowedMethods) {
+  sendJson(response, 405, {
+    error: 'Método não permitido para esta rota.',
+    allowedMethods,
+    routes: ROUTES
+  }, { allow: allowedMethods.join(', ') });
+}
 
 export const server = createServer(async (request, response) => {
   try {
@@ -308,6 +323,11 @@ export const server = createServer(async (request, response) => {
     }
     if (request.method === 'POST' && url.pathname === '/api/read-file') {
       await handleReadFile(request, response);
+      return;
+    }
+    const allowedMethods = ROUTE_METHODS.get(url.pathname);
+    if (allowedMethods) {
+      sendMethodNotAllowed(response, allowedMethods);
       return;
     }
     sendJson(response, 404, { error: 'Rota não encontrada.', routes: ROUTES });

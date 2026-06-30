@@ -143,6 +143,14 @@ function enforceRateLimit(request, response, { requestId, route }) {
   return false;
 }
 
+export function normalizeLanguageFocus(value, fallback = 'general') {
+  const normalized = typeof value === 'string'
+    ? value.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim()
+    : '';
+
+  return normalized ? normalized.slice(0, 80) : fallback;
+}
+
 export function buildCodingPrompt({ task, language = 'general', context = '' }) {
   return [
     'Você é uma SLM local focada em programação para PC fraco, sem GPU.',
@@ -176,7 +184,7 @@ async function buildGenerateRequestPayload(request, requestId) {
     maxFileReadBytes: MAX_FILE_READ_BYTES,
     allowedFileExtensions: ALLOWED_FILE_EXTENSIONS
   });
-  const language = typeof body.language === 'string' && body.language.trim() ? body.language.trim().slice(0, 80) : 'general';
+  const language = normalizeLanguageFocus(body.language);
   const prompt = buildCodingPrompt({ task: task.slice(0, 8000), language, context: contextBundle.context });
   return { prompt, contextBundle };
 }

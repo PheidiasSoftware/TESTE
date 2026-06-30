@@ -82,6 +82,8 @@ export function normalizeOllamaUrl(value, fallback = DEFAULT_OLLAMA_URL) {
   try {
     const url = new URL(raw);
     if (!['http:', 'https:'].includes(url.protocol)) return fallback;
+    url.username = '';
+    url.password = '';
     url.hash = '';
     url.search = '';
     return url.toString().replace(/\/+$/, '');

@@ -23,6 +23,20 @@ export const LOG_LEVEL_PRIORITY = {
   debug: 4
 };
 
+export const RUNTIME_NUMERIC_LIMITS = {
+  MAX_BODY_BYTES: { fallback: 65536, minimum: 1024, maximum: 262144 },
+  REQUEST_TIMEOUT_MS: { fallback: 120000, minimum: 1000, maximum: 300000 },
+  MAX_QUEUE_SIZE: { fallback: 4, minimum: 1, maximum: 20 },
+  GENERATION_CONCURRENCY: { fallback: 1, minimum: 1, maximum: 2 },
+  MAX_CACHE_ENTRIES: { fallback: 20, minimum: 0, maximum: 100 },
+  MAX_FILE_READ_BYTES: { fallback: 32768, minimum: 1024, maximum: 131072 },
+  MAX_CONTEXT_FILES: { fallback: 4, minimum: 0, maximum: 12 },
+  MAX_CONTEXT_BYTES: { fallback: 12000, minimum: 1024, maximum: 32768 },
+  RATE_LIMIT_WINDOW_MS: { fallback: 60000, minimum: 1000, maximum: 300000 },
+  RATE_LIMIT_MAX_REQUESTS: { fallback: 30, minimum: 1, maximum: 300 },
+  RATE_LIMIT_MAX_CLIENTS: { fallback: 500, minimum: 1, maximum: 2000 }
+};
+
 export const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content)/i;
 
 const DEFAULT_HOST = '127.0.0.1';
@@ -41,8 +55,9 @@ export function parseInteger(value, fallback) {
   return Number.isSafeInteger(parsed) ? parsed : fallback;
 }
 
-function parseMinimumInteger(value, fallback, minimum) {
-  return Math.max(minimum, parseInteger(value, fallback));
+export function parseBoundedInteger(value, { fallback, minimum, maximum }) {
+  const parsed = parseInteger(value, fallback);
+  return Math.min(maximum, Math.max(minimum, parsed));
 }
 
 export function normalizeHost(value, fallback = DEFAULT_HOST) {
@@ -128,22 +143,22 @@ export function loadConfig(env = process.env) {
     PORT: parsePort(env.PORT || '3131', 3131),
     OLLAMA_URL: normalizeOllamaUrl(env.OLLAMA_URL),
     MODEL: normalizeModelName(env.MODEL),
-    MAX_BODY_BYTES: parseInteger(env.MAX_BODY_BYTES || '65536', 65536),
-    REQUEST_TIMEOUT_MS: parseInteger(env.REQUEST_TIMEOUT_MS || '120000', 120000),
-    MAX_QUEUE_SIZE: parseInteger(env.MAX_QUEUE_SIZE || '4', 4),
-    GENERATION_CONCURRENCY: parseMinimumInteger(env.GENERATION_CONCURRENCY || '1', 1, 1),
+    MAX_BODY_BYTES: parseBoundedInteger(env.MAX_BODY_BYTES, RUNTIME_NUMERIC_LIMITS.MAX_BODY_BYTES),
+    REQUEST_TIMEOUT_MS: parseBoundedInteger(env.REQUEST_TIMEOUT_MS, RUNTIME_NUMERIC_LIMITS.REQUEST_TIMEOUT_MS),
+    MAX_QUEUE_SIZE: parseBoundedInteger(env.MAX_QUEUE_SIZE, RUNTIME_NUMERIC_LIMITS.MAX_QUEUE_SIZE),
+    GENERATION_CONCURRENCY: parseBoundedInteger(env.GENERATION_CONCURRENCY, RUNTIME_NUMERIC_LIMITS.GENERATION_CONCURRENCY),
     ENABLE_PROMPT_CACHE: parseBooleanFlag(env.ENABLE_PROMPT_CACHE, true),
-    MAX_CACHE_ENTRIES: parseMinimumInteger(env.MAX_CACHE_ENTRIES || '20', 20, 0),
+    MAX_CACHE_ENTRIES: parseBoundedInteger(env.MAX_CACHE_ENTRIES, RUNTIME_NUMERIC_LIMITS.MAX_CACHE_ENTRIES),
     PROJECT_ROOT: resolve(env.PROJECT_ROOT || process.cwd()),
-    MAX_FILE_READ_BYTES: parseMinimumInteger(env.MAX_FILE_READ_BYTES || '32768', 32768, 1024),
-    MAX_CONTEXT_FILES: parseMinimumInteger(env.MAX_CONTEXT_FILES || '4', 4, 0),
-    MAX_CONTEXT_BYTES: parseMinimumInteger(env.MAX_CONTEXT_BYTES || '12000', 12000, 1024),
+    MAX_FILE_READ_BYTES: parseBoundedInteger(env.MAX_FILE_READ_BYTES, RUNTIME_NUMERIC_LIMITS.MAX_FILE_READ_BYTES),
+    MAX_CONTEXT_FILES: parseBoundedInteger(env.MAX_CONTEXT_FILES, RUNTIME_NUMERIC_LIMITS.MAX_CONTEXT_FILES),
+    MAX_CONTEXT_BYTES: parseBoundedInteger(env.MAX_CONTEXT_BYTES, RUNTIME_NUMERIC_LIMITS.MAX_CONTEXT_BYTES),
     ALLOWED_FILE_EXTENSIONS: getAllowedFileExtensions(env),
     LOG_LEVEL: normalizeLogLevel(env.LOG_LEVEL),
     ENABLE_RATE_LIMIT: parseBooleanFlag(env.ENABLE_RATE_LIMIT, true),
-    RATE_LIMIT_WINDOW_MS: parseMinimumInteger(env.RATE_LIMIT_WINDOW_MS || '60000', 60000, 1000),
-    RATE_LIMIT_MAX_REQUESTS: parseMinimumInteger(env.RATE_LIMIT_MAX_REQUESTS || '30', 30, 1),
-    RATE_LIMIT_MAX_CLIENTS: parseMinimumInteger(env.RATE_LIMIT_MAX_CLIENTS || '500', 500, 1),
+    RATE_LIMIT_WINDOW_MS: parseBoundedInteger(env.RATE_LIMIT_WINDOW_MS, RUNTIME_NUMERIC_LIMITS.RATE_LIMIT_WINDOW_MS),
+    RATE_LIMIT_MAX_REQUESTS: parseBoundedInteger(env.RATE_LIMIT_MAX_REQUESTS, RUNTIME_NUMERIC_LIMITS.RATE_LIMIT_MAX_REQUESTS),
+    RATE_LIMIT_MAX_CLIENTS: parseBoundedInteger(env.RATE_LIMIT_MAX_CLIENTS, RUNTIME_NUMERIC_LIMITS.RATE_LIMIT_MAX_CLIENTS),
     TRUST_PROXY: parseBooleanFlag(env.TRUST_PROXY, false)
   };
 }

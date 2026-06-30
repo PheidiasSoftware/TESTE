@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  assessLargeCodeRequest,
   buildLargeCodePlan,
   chunkList,
   clampSafeInteger,
@@ -43,6 +44,30 @@ test('clampSafeInteger aplica limites seguros', () => {
   assert.equal(clampSafeInteger(0, bounds), 1);
   assert.equal(clampSafeInteger(99, bounds), 8);
   assert.equal(clampSafeInteger('bad', bounds), 4);
+});
+
+test('assessLargeCodeRequest detecta tarefa ampla antes de chamar Ollama', () => {
+  const assessment = assessLargeCodeRequest({
+    task: 'Criar CRUD completo de clientes com rotas, service, repository e testes',
+    contextFiles: ['src/server.js', 'src/config.js', 'src/http.js', 'src/logger.js'],
+    targetFiles: ['src/modules/customers/routes.js']
+  });
+
+  assert.equal(assessment.isLarge, true);
+  assert.equal(assessment.recommendedEndpoint, 'POST /api/large-code-plan');
+  assert.ok(assessment.reasons.includes('many-context-files'));
+  assert.ok(assessment.reasons.includes('target-files-present'));
+  assert.ok(assessment.reasons.includes('large-task-keyword'));
+});
+
+test('assessLargeCodeRequest mantém tarefa pequena no fluxo normal', () => {
+  const assessment = assessLargeCodeRequest({
+    task: 'Crie uma função para somar dois números.',
+    contextFiles: ['src/math.js']
+  });
+
+  assert.equal(assessment.isLarge, false);
+  assert.deepEqual(assessment.reasons, []);
 });
 
 test('buildLargeCodePlan cria plano por arquivo alvo sem chamar Ollama', () => {

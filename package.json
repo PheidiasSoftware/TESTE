@@ -9,7 +9,8 @@
     "start:windows": "powershell -ExecutionPolicy Bypass -File scripts/start-windows.ps1",
     "dev": "node --watch src/server.js",
     "test": "node --test",
-    "test:windows": "powershell -ExecutionPolicy Bypass -File scripts/test-windows.ps1"
+    "test:windows": "powershell -ExecutionPolicy Bypass -File scripts/test-windows.ps1",
+    "smoke:windows": "powershell -ExecutionPolicy Bypass -File scripts/smoke-windows.ps1"
   },
   "keywords": [
     "llm",

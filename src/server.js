@@ -165,7 +165,8 @@ function callOllamaGenerateStream(prompt, { signal, onToken } = {}) {
 
 async function buildGenerateRequestPayload(request, requestId) {
   const body = await readJsonBody(request);
-  if (!body.task || typeof body.task !== 'string') throw Object.assign(new Error('Campo obrigatório: task precisa ser texto.'), { statusCode: 400, requestId });
+  const task = typeof body.task === 'string' ? body.task.trim() : '';
+  if (!task) throw Object.assign(new Error('Campo obrigatório: task precisa ser texto não vazio.'), { statusCode: 400, requestId });
   const contextBundle = await buildContextFromFiles({
     context: typeof body.context === 'string' ? body.context.slice(0, MAX_CONTEXT_BYTES) : '',
     contextFiles: body.contextFiles,
@@ -175,7 +176,8 @@ async function buildGenerateRequestPayload(request, requestId) {
     maxFileReadBytes: MAX_FILE_READ_BYTES,
     allowedFileExtensions: ALLOWED_FILE_EXTENSIONS
   });
-  const prompt = buildCodingPrompt({ task: body.task.slice(0, 8000), language: typeof body.language === 'string' ? body.language.slice(0, 80) : 'general', context: contextBundle.context });
+  const language = typeof body.language === 'string' && body.language.trim() ? body.language.trim().slice(0, 80) : 'general';
+  const prompt = buildCodingPrompt({ task: task.slice(0, 8000), language, context: contextBundle.context });
   return { prompt, contextBundle };
 }
 

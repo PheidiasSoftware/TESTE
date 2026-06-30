@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   buildOllamaGeneratePayload,
   createOllamaClient,
+  createSafeUpstreamError,
   parseOllamaStreamLine,
   readOllamaStream,
   sanitizeOllamaOptions,
@@ -53,6 +54,19 @@ test('sanitizeUpstreamErrorDetail removes control characters and caps detail siz
 test('sanitizeUpstreamErrorDetail omits empty or non-text detail', () => {
   assert.equal(sanitizeUpstreamErrorDetail('   '), undefined);
   assert.equal(sanitizeUpstreamErrorDetail(null), undefined);
+});
+
+test('createSafeUpstreamError keeps sanitized upstream detail internal', () => {
+  const error = createSafeUpstreamError('Falha ao chamar Ollama.', {
+    detail: ' token\nsecret '.padEnd(400, 'x')
+  });
+
+  assert.equal(error.statusCode, 502);
+  assert.equal(error.exposeDetail, false);
+  assert.equal(error.detail, undefined);
+  assert.equal(error.upstreamErrorDetail.length, 300);
+  assert.ok(error.upstreamErrorDetail.startsWith('token secret'));
+  assert.equal(error.upstreamErrorDetail.includes('\n'), false);
 });
 
 test('buildOllamaGeneratePayload rejects missing model or prompt', () => {
@@ -121,9 +135,11 @@ test('createOllamaClient maps Ollama failures to safe backend error', async () =
   await assert.rejects(
     () => client.generate('teste'),
     error => error.statusCode === 502
-      && error.detail.includes('modelo não encontrado')
-      && error.detail.length === 300
-      && !error.detail.includes('\n')
+      && error.exposeDetail === false
+      && error.detail === undefined
+      && error.upstreamErrorDetail.includes('modelo não encontrado')
+      && error.upstreamErrorDetail.length === 300
+      && !error.upstreamErrorDetail.includes('\n')
   );
 });
 

@@ -46,6 +46,8 @@ Em execução posterior de 2026-06-30, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-30, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `src/server.js`, `src/config.js`, `src/logger.js`, `test/logger.test.js`, `docs/api-contract.md`, `docs/backend-mvp-status.md`, PRs/issues abertos, commits recentes e buscas por registros do Claude Agent. Não foram encontrados PRs/issues abertos nem registros claros do Claude Agent. A alteração segura foi ampliar a redaction de logs estruturados para campos operacionais locais (`projectRoot`, `ollamaUrl`, `baseUrl`) além de prompts/contexto/respostas, evitando registrar caminho absoluto do projeto e URL real do runtime local. `test/logger.test.js` recebeu cobertura dedicada e `docs/api-contract.md` foi atualizado.
 
+Em execução posterior de 2026-06-30, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `src/server.js`, `src/config.js`, `test/server.test.js`, `docs/api-contract.md`, `docs/backend-mvp-status.md`, PRs/issues abertos e buscas por registros do Claude Agent. Não foram encontrados PRs/issues abertos nem registros claros do Claude Agent. A alteração segura foi parar de expor a raiz absoluta do projeto na saída de console de inicialização: `startServer()` agora usa `getStartupConsoleLines()`, que imprime `raiz=redacted` para leitura de arquivos. Foi criado `test/startup-console.test.js` para cobrir essa garantia sem chamar Ollama.
+
 Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -65,9 +67,10 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - `contextFiles` em `/api/generate` reutilizando a leitura segura.
 - Rate limit local em memória nas rotas pesadas.
 - Logs estruturados em JSON Lines com redaction de campos sensíveis, incluindo prompt, contexto, resposta, conteúdo, URL real do runtime local e caminho absoluto do projeto.
+- Saída de console de inicialização sem caminho absoluto do projeto; a linha de leitura de arquivos usa `raiz=redacted`.
 - Script PowerShell para início conservador no Windows, com checagem de raiz do repositório, disponibilidade de `node`, Node.js 20+, padrões locais explícitos e verificação leve do Ollama antes do start.
 - Script PowerShell `scripts/test-windows.ps1` para validação offline conservadora no Windows via `npm run test:windows`, incluindo checagem de raiz do repositório, disponibilidade de `node`/`npm` e Node.js 20+.
-- Helpers Windows e CI fixam explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000`, além dos limites conservadores de fila, contexto, cache, rate limit, proxy e logs.
+- Configuração de `HOST` endurecida para aceitar somente loopback local (`127.0.0.1`, `localhost`, `::1`).
 - Configuração de `PORT` endurecida para aceitar somente portas TCP válidas entre `1` e `65535`, com fallback local seguro para `3131`.
 - Configuração de `OLLAMA_URL` endurecida para aceitar somente URLs `http`/`https`, remover query/hash/barras finais e usar fallback local seguro em valores inválidos.
 - Parsing de inteiros de ambiente endurecido para aceitar apenas inteiros completos e seguros, reduzindo risco de configuração ambígua em limites de payload, timeout, fila, cache, contexto e rate limit.

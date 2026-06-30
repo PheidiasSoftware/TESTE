@@ -21,6 +21,7 @@ A porta e host podem mudar via `HOST` e `PORT`.
 - Erros retornam pelo menos o campo `error`.
 - Quando disponível, respostas incluem `requestId` para correlação com logs locais.
 - Prompts, contexto, conteúdo de arquivos e resposta gerada não devem ser gravados nos logs estruturados.
+- Endpoints públicos de status não expõem caminho absoluto do projeto nem URL real do Ollama.
 
 ## `GET /health`
 
@@ -39,7 +40,10 @@ curl http://127.0.0.1:3131/health
   "status": "ok",
   "service": "teste-local-code-llm-backend",
   "model": "qwen2.5-coder:1.5b-instruct",
-  "ollamaUrl": "http://127.0.0.1:11434",
+  "ollama": {
+    "configured": true,
+    "endpoint": "redacted"
+  },
   "queue": {
     "activeGenerations": 0,
     "queuedGenerations": 0,
@@ -57,6 +61,30 @@ curl http://127.0.0.1:3131/health
     "writes": 0,
     "evictions": 0
   },
+  "fileRead": {
+    "maxFileReadBytes": 32768,
+    "maxContextFiles": 4,
+    "maxContextBytes": 12000,
+    "allowedFileExtensions": [".css", ".dart", ".html", ".js", ".json", ".md", ".ps1", ".sql", ".ts", ".txt", ".yaml", ".yml"]
+  },
+  "logging": {
+    "level": "info",
+    "format": "json-lines",
+    "redaction": "sensitive-fields"
+  },
+  "rateLimit": {
+    "enabled": true,
+    "windowMs": 60000,
+    "maxRequests": 30,
+    "maxClients": 500,
+    "trackedClients": 0,
+    "trustProxy": false,
+    "appliedToRoutes": [
+      "POST /api/generate",
+      "POST /api/generate-stream",
+      "POST /api/read-file"
+    ]
+  },
   "routes": [
     "GET /health",
     "GET /api/status",
@@ -67,7 +95,7 @@ curl http://127.0.0.1:3131/health
 }
 ```
 
-Campos extras de `fileRead`, `logging` e `rateLimit` podem aparecer e devem ser tratados como diagnóstico.
+Campos de diagnóstico podem crescer de forma compatível. Clientes não devem depender de `ollamaUrl` nem de `fileRead.projectRoot`, pois esses detalhes locais são omitidos intencionalmente.
 
 ## `GET /api/status`
 
@@ -81,7 +109,7 @@ curl http://127.0.0.1:3131/api/status
 
 ### Response `200`
 
-O formato é semelhante ao `/health`, mas focado em métricas de fila, cache, leitura segura, logs e rate limit.
+O formato é semelhante ao `/health`, mas focado em métricas de fila, cache, leitura segura, logs e rate limit. A resposta também usa `ollama.configured` e `ollama.endpoint="redacted"` em vez de expor a URL real do runtime.
 
 Clientes devem tratar novos campos como compatíveis para frente.
 
@@ -258,6 +286,5 @@ Clientes locais devem:
 - preferir `POST /api/generate-stream` para respostas longas;
 - manter timeouts próprios maiores que o tempo esperado em CPU fraca;
 - tratar `429` com espera usando `Retry-After` quando existir;
-- não assumir que `response.done` sempre será `true` se o runtime local interromper a geração;
-- nunca enviar segredos no `context` ou em arquivos de contexto;
-- manter a API acessível apenas localmente, salvo decisão explícita e segura do usuário.
+- ler `ollama.configured` para saber se há runtime configurado, sem depender de URL real exposta;
+- tratar campos novos como compatíveis para frente.

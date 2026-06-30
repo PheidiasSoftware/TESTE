@@ -1,5 +1,11 @@
+export const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer'
+};
+
 export function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
+    ...SECURITY_HEADERS,
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     ...headers
@@ -14,6 +20,7 @@ export function sendServerEvent(response, event, payload) {
 
 export function openEventStream(response) {
   response.writeHead(200, {
+    ...SECURITY_HEADERS,
     'content-type': 'text/event-stream; charset=utf-8',
     'cache-control': 'no-store, no-transform',
     connection: 'keep-alive',

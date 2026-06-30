@@ -8,6 +8,7 @@ import {
   buildCodingPrompt,
   createGenerationQueue,
   createPromptCache,
+  estimateQueueWaitMs,
   readProjectFile,
   server,
   validateSafeProjectFilePath
@@ -87,6 +88,12 @@ test('buildCodingPrompt inclui foco, contexto e tarefa sem depender do Ollama', 
   assert.match(prompt, /Projeto usa HTTP nativo/);
   assert.match(prompt, /Criar endpoint de health check/);
   assert.match(prompt, /(?:Não|Evite) invent[ae]r arquivos/);
+});
+
+test('estimateQueueWaitMs nunca retorna valor negativo', () => {
+  assert.equal(estimateQueueWaitMs({ queuedAt: 1000, completedAt: 1500, totalDurationNs: 100_000_000 }), 400);
+  assert.equal(estimateQueueWaitMs({ queuedAt: 1000, completedAt: 1100, totalDurationNs: 500_000_000 }), 0);
+  assert.equal(estimateQueueWaitMs({ queuedAt: 1000, completedAt: 900, totalDurationNs: 0 }), 0);
 });
 
 test('createGenerationQueue limita fila cheia com HTTP 429', async () => {

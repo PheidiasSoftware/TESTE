@@ -60,6 +60,9 @@ if (-not $env:MAX_CACHE_ENTRIES) { $env:MAX_CACHE_ENTRIES = "20" }
 if (-not $env:MAX_CONTEXT_FILES) { $env:MAX_CONTEXT_FILES = "4" }
 if (-not $env:MAX_CONTEXT_BYTES) { $env:MAX_CONTEXT_BYTES = "12000" }
 if (-not $env:MAX_FILE_READ_BYTES) { $env:MAX_FILE_READ_BYTES = "32768" }
+if (-not $env:MAX_LARGE_PLAN_FILES) { $env:MAX_LARGE_PLAN_FILES = "50" }
+if (-not $env:MAX_LARGE_PLAN_STEPS) { $env:MAX_LARGE_PLAN_STEPS = "20" }
+if (-not $env:MAX_FILES_PER_CONTEXT_BATCH) { $env:MAX_FILES_PER_CONTEXT_BATCH = "4" }
 if (-not $env:ENABLE_RATE_LIMIT) { $env:ENABLE_RATE_LIMIT = "true" }
 if (-not $env:RATE_LIMIT_WINDOW_MS) { $env:RATE_LIMIT_WINDOW_MS = "60000" }
 if (-not $env:RATE_LIMIT_MAX_REQUESTS) { $env:RATE_LIMIT_MAX_REQUESTS = "30" }
@@ -80,6 +83,7 @@ Write-Host "Max queue size: $env:MAX_QUEUE_SIZE"
 Write-Host "Prompt cache: $env:ENABLE_PROMPT_CACHE / max entries $env:MAX_CACHE_ENTRIES"
 Write-Host "Context files: max $env:MAX_CONTEXT_FILES / max bytes $env:MAX_CONTEXT_BYTES"
 Write-Host "Max file read bytes: $env:MAX_FILE_READ_BYTES"
+Write-Host "Large generation plan: max files $env:MAX_LARGE_PLAN_FILES / max steps $env:MAX_LARGE_PLAN_STEPS / batch size $env:MAX_FILES_PER_CONTEXT_BATCH"
 Write-Host "Rate limit: $env:ENABLE_RATE_LIMIT / $env:RATE_LIMIT_MAX_REQUESTS requests per $env:RATE_LIMIT_WINDOW_MS ms / max clients $env:RATE_LIMIT_MAX_CLIENTS"
 Write-Host "Trust proxy: $env:TRUST_PROXY"
 Write-Host "Log level: $env:LOG_LEVEL"

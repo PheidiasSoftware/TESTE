@@ -125,6 +125,13 @@ test('buildContextFromFiles limita contexto manual sem quebrar UTF-8', async () 
   assert.equal(result.truncated, true);
 });
 
+test('buildContextFromFiles valida contextFiles não-array antes do limite de quantidade', async () => {
+  await assert.rejects(
+    () => buildContextFromFiles({ contextFiles: 'src/index.js', maxFiles: 1 }),
+    error => error.statusCode === 400 && /lista de caminhos relativos/.test(error.message)
+  );
+});
+
 test('buildContextFromFiles limita quantidade de arquivos e tipos inválidos', async () => {
   await assert.rejects(
     () => buildContextFromFiles({ contextFiles: ['a.md', 'b.md'], maxFiles: 1 }),

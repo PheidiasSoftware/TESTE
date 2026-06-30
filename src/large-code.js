@@ -1,6 +1,37 @@
 const DEFAULT_MAX_FILES = 50;
 const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_FILES_PER_STEP = 4;
+const DEFAULT_SIMPLE_CONTEXT_FILES = 3;
+const DEFAULT_SIMPLE_TASK_CHARS = 800;
+
+const LARGE_TASK_PATTERNS = [
+  /\bcrud\b/i,
+  /sistema\s+completo/i,
+  /app\s+completo/i,
+  /aplica[cç][aã]o\s+completa/i,
+  /projeto\s+completo/i,
+  /backend\s+completo/i,
+  /frontend\s+completo/i,
+  /m[óo]dulo\s+completo/i,
+  /v[áa]rios?\s+arquivos/i,
+  /muitos?\s+arquivos/i,
+  /contexto\s+gigante/i,
+  /grande\s+quantidade/i,
+  /gerar\s+muito\s+c[óo]digo/i,
+  /rotas?.*service.*test/i,
+  /service.*repository.*test/i
+];
+
+const STRONG_LARGE_TASK_PATTERNS = [
+  /crud\s+completo/i,
+  /sistema\s+completo/i,
+  /projeto\s+completo/i,
+  /app\s+completo/i,
+  /backend\s+completo/i,
+  /frontend\s+completo/i,
+  /contexto\s+gigante/i,
+  /grande\s+quantidade\s+de\s+c[óo]digo/i
+];
 
 function createHttpError(message, statusCode = 400) {
   return Object.assign(new Error(message), { statusCode });
@@ -61,6 +92,49 @@ export function chunkList(items, size) {
   }
 
   return chunks;
+}
+
+export function assessLargeCodeRequest({
+  task,
+  contextFiles,
+  targetFiles,
+  contextTruncated = false,
+  maxSimpleContextFiles = DEFAULT_SIMPLE_CONTEXT_FILES,
+  maxSimpleTaskChars = DEFAULT_SIMPLE_TASK_CHARS
+} = {}) {
+  const safeTask = normalizeLargeCodeText(task, { fieldName: 'task', maxChars: 12000 });
+  const contextFileCount = Array.isArray(contextFiles) ? contextFiles.length : 0;
+  const targetFileCount = Array.isArray(targetFiles) ? targetFiles.length : 0;
+  const reasons = [];
+
+  if (safeTask.length > maxSimpleTaskChars) reasons.push('task-long');
+  if (contextFileCount > maxSimpleContextFiles) reasons.push('many-context-files');
+  if (targetFileCount > 0) reasons.push('target-files-present');
+  if (contextTruncated) reasons.push('context-truncated');
+
+  const hasLargeKeyword = LARGE_TASK_PATTERNS.some(pattern => pattern.test(safeTask));
+  const hasStrongLargeKeyword = STRONG_LARGE_TASK_PATTERNS.some(pattern => pattern.test(safeTask));
+
+  if (hasStrongLargeKeyword || (hasLargeKeyword && (safeTask.length > 120 || contextFileCount > 0 || targetFileCount > 0))) {
+    reasons.push('large-task-keyword');
+  }
+
+  const uniqueReasons = Array.from(new Set(reasons));
+
+  return {
+    isLarge: uniqueReasons.length > 0,
+    reasons: uniqueReasons,
+    recommendedEndpoint: 'POST /api/large-code-plan',
+    message: 'Esta tarefa parece grande para uma geração única. Use /api/large-code-plan para dividir em etapas e depois gere cada etapa com /api/generate-stream.',
+    detection: {
+      taskChars: safeTask.length,
+      contextFiles: contextFileCount,
+      targetFiles: targetFileCount,
+      contextTruncated: Boolean(contextTruncated),
+      maxSimpleContextFiles,
+      maxSimpleTaskChars
+    }
+  };
 }
 
 function makeStep({ id, type, title, goal, language, task, contextFiles = [], targetFile = null, previousStepMemory = '' }) {

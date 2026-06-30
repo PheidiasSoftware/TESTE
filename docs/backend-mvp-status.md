@@ -26,7 +26,7 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1`, `scripts/start-windows.ps1` e `test/config.test.js`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A tentativa de checkout local continuou bloqueada pelo ambiente, então a alteração segura foi alinhar o helper de inicialização Windows ao helper de teste: `scripts/start-windows.ps1` agora valida raiz do repositório, exige Node.js 20+, define explicitamente padrões conservadores de ambiente e imprime a versão do Node antes de iniciar o backend.
 
-Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1`, `scripts/start-windows.ps1` e `test/config.test.js`; issues e PRs abertos foram consultados e não retornaram resultados; a busca por registros claros de Claude Agent também não retornou resultados. A alteração segura foi alinhar explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000` nos helpers Windows e na CI, reduzindo variação operacional entre teste offline, start local e workflow remoto sem mexer no roteamento do backend.
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `test/config.test.js`, `scripts/test-windows.ps1` e `scripts/start-windows.ps1`; issues e PRs abertos foram consultados e não retornaram resultados; a busca por registros claros de Claude Agent também não retornou resultados. A alteração segura foi alinhar explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000` nos helpers Windows e na CI, reduzindo variação operacional entre teste offline, start local e workflow remoto sem mexer no roteamento do backend.
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `test/config.test.js`, `scripts/test-windows.ps1` e `scripts/start-windows.ps1`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A alteração segura foi endurecer os helpers Windows para validar disponibilidade de comandos antes de executá-los: `scripts/test-windows.ps1` agora falha com mensagem clara se `node` ou `npm` não estiverem no PATH, e `scripts/start-windows.ps1` falha com mensagem clara se `node` não estiver no PATH. A documentação de validação local foi atualizada para registrar esse comportamento.
 
@@ -38,6 +38,8 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `src/server.js`, `src/config.js`, `test/server.test.js`, `test/config.test.js`, `docs/backend-mvp-status.md` e registros de memória recentes; PRs recentes foram consultados, sem resultados; a busca textual não encontrou registros claros do Claude Agent. A alteração segura foi sanitizar o contrato público de `GET /health` e `GET /api/status`: os endpoints não expõem mais `PROJECT_ROOT` nem a URL real do Ollama, mantendo apenas `ollama.configured` e `ollama.endpoint=redacted`. `test/server.test.js` cobre a ausência de `ollamaUrl` e `fileRead.projectRoot` nos endpoints públicos.
 
+Em execução de 2026-06-30, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `src/config.js`, `src/server.js`, `src/http.js`, `test/server.test.js`, `docs/api-contract.md`, `docs/backend-mvp-status.md`, issues/PRs abertos e commits recentes relacionados a configuração. Não foram encontrados issues/PRs abertos nem registros claros do Claude Agent. A alteração segura foi validar `Content-Type` JSON nas rotas `POST /api/generate`, `POST /api/generate-stream` e `POST /api/read-file` antes de ler o corpo, retornando `415` para media type não JSON. `test/server.test.js` recebeu cobertura para rejeição de `text/plain` e aceitação de `application/json; charset=utf-8`. `docs/api-contract.md` foi atualizado com a exigência.
+
 Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -46,9 +48,9 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - Servidor HTTP nativo escutando `127.0.0.1` por padrão.
 - `GET /health` para diagnóstico básico com contrato público sanitizado, sem expor `PROJECT_ROOT` nem URL real do Ollama.
 - `GET /api/status` para métricas locais com contrato público sanitizado, sem expor `PROJECT_ROOT` nem URL real do Ollama.
-- `POST /api/generate` para geração via Ollama.
-- `POST /api/generate-stream` com Server-Sent Events.
-- `POST /api/read-file` para leitura segura de arquivos textuais pequenos.
+- `POST /api/generate` para geração via Ollama, com validação de `Content-Type` JSON antes da leitura do corpo.
+- `POST /api/generate-stream` com Server-Sent Events e validação de `Content-Type` JSON antes da leitura do corpo.
+- `POST /api/read-file` para leitura segura de arquivos textuais pequenos, com validação de `Content-Type` JSON antes da leitura do corpo.
 - Fila simples de geração com concorrência conservadora.
 - Cache em memória por hash de prompt integrado via `src/cache.js`.
 - Leitura segura de arquivos textuais pequenos com allowlist e bloqueio de caminhos sensíveis.

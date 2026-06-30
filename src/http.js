@@ -21,16 +21,30 @@ export function openEventStream(response) {
   });
 }
 
+function createClientClosedError() {
+  return Object.assign(new Error('Requisição encerrada pelo cliente antes do corpo ser lido.'), {
+    statusCode: 499,
+    code: 'CLIENT_CLOSED_REQUEST'
+  });
+}
+
 export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = true } = {}) {
   return new Promise((resolve, reject) => {
     let size = 0;
     let raw = '';
     let settled = false;
+    let ended = false;
 
     function fail(error) {
       if (settled) return;
       settled = true;
       reject(error);
+    }
+
+    function finish(value) {
+      if (settled) return;
+      settled = true;
+      resolve(value);
     }
 
     request.on('data', chunk => {
@@ -48,18 +62,26 @@ export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = 
 
     request.on('end', () => {
       if (settled) return;
-      settled = true;
+      ended = true;
 
       if (!raw.trim()) {
-        resolve({});
+        finish({});
         return;
       }
 
       try {
-        resolve(JSON.parse(raw));
+        finish(JSON.parse(raw));
       } catch {
-        reject(Object.assign(new Error('JSON inválido.'), { statusCode: 400 }));
+        fail(Object.assign(new Error('JSON inválido.'), { statusCode: 400 }));
       }
+    });
+
+    request.on('aborted', () => {
+      fail(createClientClosedError());
+    });
+
+    request.on('close', () => {
+      if (!ended) fail(createClientClosedError());
     });
 
     request.on('error', error => {

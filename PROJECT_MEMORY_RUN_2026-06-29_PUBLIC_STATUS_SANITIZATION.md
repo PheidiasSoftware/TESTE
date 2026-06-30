@@ -17,6 +17,7 @@ Arquivos e áreas verificados:
 - `test/server.test.js`: cobre contrato mínimo de health/status, validação de entrada, fila, cache e leitura segura.
 - `test/config.test.js`: cobre parsing e normalização de configuração.
 - `docs/backend-mvp-status.md`: concentra estado técnico do MVP, critérios atendidos e pendências.
+- `docs/api-contract.md`: após a alteração de código, foi reexaminado e atualizado porque ainda documentava o campo antigo `ollamaUrl`.
 - PRs recentes: consulta retornou lista vazia.
 - Busca por registros claros de Claude Agent: sem resultado útil pelo conector.
 
@@ -51,6 +52,11 @@ Implementar sanitização do contrato público de status sem alterar as rotas pe
   - Registro desta execução adicionado.
   - Critérios do MVP atualizados para mencionar contrato público sanitizado.
 
+- `docs/api-contract.md`
+  - Exemplo de `/health` atualizado para usar `ollama.configured` e `ollama.endpoint='redacted'`.
+  - Removida documentação de `ollamaUrl` como campo público.
+  - Incluída orientação para clientes não dependerem de URL real do runtime nem de caminho absoluto do projeto.
+
 - `PROJECT_MEMORY_RUN_2026-06-29_PUBLIC_STATUS_SANITIZATION.md`
   - Este arquivo registra análise, decisão, alterações, riscos e próximos passos.
 
@@ -67,7 +73,7 @@ Não foi possível executar `npm test` localmente porque o ambiente desta execu�
 ## Próximos passos seguros
 
 1. Confirmar `npm test` ou `npm run test:windows` no commit mais recente.
-2. Se CI/local passar, revisar documentação `docs/api-contract.md` para alinhar exemplos de `/health` e `/api/status` ao campo `ollama` sanitizado.
+2. Após validação verde, revisar se algum README secundário ainda menciona `ollamaUrl` em endpoints públicos.
 3. Evitar novas refatorações grandes em `src/server.js` até haver evidência objetiva de testes passando.
 
 ## Compatibilidade com Claude Agent

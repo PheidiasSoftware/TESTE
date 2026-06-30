@@ -11,7 +11,7 @@ import {
   sendJson,
   sendServerEvent
 } from './http.js';
-import { buildLargeCodePlan } from './large-code.js';
+import { assessLargeCodeRequest, buildLargeCodePlan } from './large-code.js';
 import { createStructuredLogger } from './logger.js';
 import { createOllamaClient } from './ollama.js';
 import {
@@ -23,7 +23,7 @@ import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-lim
 
 export { createPromptCache } from './cache.js';
 export { createGenerationQueue } from './generation-queue.js';
-export { buildLargeCodePlan } from './large-code.js';
+export { assessLargeCodeRequest, buildLargeCodePlan } from './large-code.js';
 export { createStructuredLogger, redactForLog } from './logger.js';
 export {
   buildContextFromFiles,
@@ -167,6 +167,50 @@ function cappedOptionalInteger(value, fallback, maximum) {
   return Math.min(maximum, parsed);
 }
 
+function buildLargeCodeSuggestion({ assessment, task, language, body }) {
+  return {
+    ...assessment,
+    bypassFlag: 'forceSingleGeneration',
+    suggestedRequest: {
+      endpoint: 'POST /api/large-code-plan',
+      body: {
+        task: task.slice(0, 8000),
+        language,
+        contextFiles: Array.isArray(body.contextFiles) ? body.contextFiles : [],
+        targetFiles: Array.isArray(body.targetFiles) ? body.targetFiles : [],
+        previousStepMemory: typeof body.previousStepMemory === 'string' ? body.previousStepMemory.slice(0, 2000) : undefined
+      }
+    }
+  };
+}
+
+function createLargeCodePlanningError({ assessment, task, language, body, requestId }) {
+  return Object.assign(new Error(assessment.message), {
+    statusCode: 422,
+    requestId,
+    largeCodeSuggestion: buildLargeCodeSuggestion({ assessment, task, language, body })
+  });
+}
+
+function sendBuildPayloadError(response, error, requestId, defaultMessage) {
+  if (error.largeCodeSuggestion) {
+    sendJson(response, error.statusCode || 422, {
+      error: error.message || defaultMessage,
+      requestId,
+      largeCodeSuggestion: error.largeCodeSuggestion,
+      largeGeneration: getLargeGenerationStatus(),
+      rateLimit: getRateLimitStatus()
+    });
+    return;
+  }
+
+  sendJson(response, error.statusCode || 500, {
+    error: error.message || defaultMessage,
+    requestId,
+    fileRead: error.statusCode === 400 ? undefined : getFileReadStatus()
+  });
+}
+
 export function normalizeLanguageFocus(value, fallback = 'general') {
   const normalized = typeof value === 'string'
     ? value.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -199,6 +243,19 @@ async function buildGenerateRequestPayload(request, requestId) {
   const body = await readJsonBody(request);
   const task = typeof body.task === 'string' ? body.task.trim() : '';
   if (!task) throw Object.assign(new Error('Campo obrigatório: task precisa ser texto não vazio.'), { statusCode: 400, requestId });
+
+  const language = normalizeLanguageFocus(body.language);
+  const forceSingleGeneration = body.forceSingleGeneration === true;
+  const preflightAssessment = assessLargeCodeRequest({
+    task,
+    contextFiles: body.contextFiles,
+    targetFiles: body.targetFiles
+  });
+
+  if (preflightAssessment.isLarge && !forceSingleGeneration) {
+    throw createLargeCodePlanningError({ assessment: preflightAssessment, task, language, body, requestId });
+  }
+
   const contextBundle = await buildContextFromFiles({
     context: typeof body.context === 'string' ? body.context.slice(0, MAX_CONTEXT_BYTES) : '',
     contextFiles: body.contextFiles,
@@ -208,7 +265,18 @@ async function buildGenerateRequestPayload(request, requestId) {
     maxFileReadBytes: MAX_FILE_READ_BYTES,
     allowedFileExtensions: ALLOWED_FILE_EXTENSIONS
   });
-  const language = normalizeLanguageFocus(body.language);
+
+  const contextAssessment = assessLargeCodeRequest({
+    task,
+    contextFiles: body.contextFiles,
+    targetFiles: body.targetFiles,
+    contextTruncated: contextBundle.truncated
+  });
+
+  if (contextAssessment.isLarge && !forceSingleGeneration) {
+    throw createLargeCodePlanningError({ assessment: contextAssessment, task, language, body, requestId });
+  }
+
   const prompt = buildCodingPrompt({ task: task.slice(0, 8000), language, context: contextBundle.context });
   return { prompt, contextBundle };
 }
@@ -224,7 +292,7 @@ async function handleGenerate(request, response) {
     payload = await buildGenerateRequestPayload(request, requestId);
   } catch (error) {
     logger.warn('generate.request.invalid', { requestId, statusCode: error.statusCode || 500, error: error.message });
-    sendJson(response, error.statusCode || 500, { error: error.message || 'Erro ao montar requisição.', requestId, fileRead: error.statusCode === 400 ? undefined : getFileReadStatus() });
+    sendBuildPayloadError(response, error, requestId, 'Erro ao montar requisição.');
     return;
   }
   const { prompt, contextBundle } = payload;
@@ -263,7 +331,7 @@ async function handleGenerateStream(request, response) {
     payload = await buildGenerateRequestPayload(request, requestId);
   } catch (error) {
     logger.warn('generate_stream.request.invalid', { requestId, statusCode: error.statusCode || 500, error: error.message });
-    sendJson(response, error.statusCode || 500, { error: error.message || 'Erro ao montar requisição de streaming.', requestId, fileRead: error.statusCode === 400 ? undefined : getFileReadStatus() });
+    sendBuildPayloadError(response, error, requestId, 'Erro ao montar requisição de streaming.');
     return;
   }
   const { prompt, contextBundle } = payload;

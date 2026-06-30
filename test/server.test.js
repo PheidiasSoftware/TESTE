@@ -231,6 +231,37 @@ test('GET /api/status responde métricas sanitizadas da fila sem chamar Ollama',
   });
 });
 
+test('POST /api/generate rejeita Content-Type não JSON antes de ler corpo', async () => {
+  await withTestServer(async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: 'task=Gerar código'
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 415);
+    assert.match(body.error, /Content-Type precisa ser application\/json/);
+    assert.equal(body.expectedContentType, 'application/json');
+    assert.equal(typeof body.requestId, 'string');
+  });
+});
+
+test('POST /api/generate aceita Content-Type JSON com charset', async () => {
+  await withTestServer(async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ language: 'Node.js' })
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.match(body.error, /task precisa ser texto/);
+    assert.equal(typeof body.requestId, 'string');
+  });
+});
+
 test('POST /api/generate valida task antes de chamar Ollama', async () => {
   await withTestServer(async baseUrl => {
     const response = await fetch(`${baseUrl}/api/generate`, {

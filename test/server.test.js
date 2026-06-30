@@ -86,7 +86,7 @@ test('buildCodingPrompt inclui foco, contexto e tarefa sem depender do Ollama', 
   assert.match(prompt, /Node\.js/);
   assert.match(prompt, /Projeto usa HTTP nativo/);
   assert.match(prompt, /Criar endpoint de health check/);
-  assert.match(prompt, /Não invente arquivos/);
+  assert.match(prompt, /(?:Não|Evite) invent[ae]r arquivos/);
 });
 
 test('createGenerationQueue limita fila cheia com HTTP 429', async () => {

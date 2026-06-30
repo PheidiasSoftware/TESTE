@@ -1,6 +1,9 @@
 export const SECURITY_HEADERS = {
   'x-content-type-options': 'nosniff',
-  'referrer-policy': 'no-referrer'
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'no-referrer',
+  'cross-origin-resource-policy': 'same-origin',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()'
 };
 
 export function sendJson(response, statusCode, payload, headers = {}) {

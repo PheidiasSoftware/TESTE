@@ -138,8 +138,8 @@ Envie `Content-Type: application/json`.
 
 | Campo | Tipo | Obrigatório | Observação |
 | --- | --- | --- | --- |
-| `task` | string | sim | Tarefa de programação. O servidor limita tamanho antes de montar o prompt. |
-| `language` | string | não | Foco técnico, como `Node.js`, `Flutter`, `Dart` ou `MySQL`. |
+| `task` | string | sim | Tarefa de programação. O servidor exige texto não vazio após `trim()` e limita tamanho antes de montar o prompt. |
+| `language` | string | não | Foco técnico, como `Node.js`, `Flutter`, `Dart` ou `MySQL`. O servidor remove quebras de linha/caracteres de controle, compacta espaços, limita a 80 caracteres e usa `general` quando vazio. |
 | `context` | string | não | Contexto textual curto informado pelo cliente. |
 | `contextFiles` | string[] | não | Lista de caminhos relativos para arquivos textuais pequenos dentro do projeto. Uma string solta é inválida; envie sempre um array. |
 
@@ -173,7 +173,7 @@ Envie `Content-Type: application/json`.
 
 | Status | Quando ocorre |
 | --- | --- |
-| `400` | JSON inválido, `task` ausente, `contextFiles` não-array, item de `contextFiles` não-textual ou caminho malformado. |
+| `400` | JSON inválido, `task` ausente/vazia, `contextFiles` não-array, item de `contextFiles` não-textual ou caminho malformado. |
 | `403` | Tentativa de ler caminho fora do projeto ou pasta bloqueada. |
 | `405` | Rota conhecida chamada com método HTTP incorreto; a resposta inclui `Allow` e `allowedMethods`. |
 | `413` | Payload ou arquivo acima do limite configurado. |
@@ -189,7 +189,7 @@ Gera uma resposta textual via Server-Sent Events. Recomendado para clientes que 
 
 ### Request JSON
 
-Mesmo corpo de `/api/generate`, com `Content-Type: application/json`.
+Mesmo corpo de `/api/generate`, com `Content-Type: application/json`. A normalização de `task`, `language`, `context` e `contextFiles` é a mesma do endpoint sem streaming.
 
 ### Eventos SSE
 

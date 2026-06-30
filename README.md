@@ -59,6 +59,7 @@ O script:
 - mantém `GENERATION_CONCURRENCY=1` quando a variável não foi definida;
 - mantém `MAX_QUEUE_SIZE=4` quando a variável não foi definida;
 - mantém cache pequeno por padrão;
+- mantém limites conservadores para contexto e planejamento de geração grande;
 - verifica se o Ollama responde em `OLLAMA_URL`;
 - apenas inicia o backend local, sem executar código gerado pelo modelo.
 
@@ -75,6 +76,14 @@ O projeto usa o test runner nativo do Node.js, sem dependências externas:
 ```bash
 npm test
 ```
+
+No Windows, use também:
+
+```powershell
+npm run test:windows
+```
+
+O script `test:windows` aplica os mesmos padrões conservadores de contexto, fila, cache, rate limit e geração grande antes de rodar os testes offline.
 
 Os testes atuais validam:
 

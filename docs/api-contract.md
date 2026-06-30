@@ -26,6 +26,7 @@ A porta e host podem mudar via `HOST` e `PORT`.
 - Quando disponível, respostas incluem `requestId` para correlação com logs locais.
 - Prompts, contexto, conteúdo de arquivos, resposta gerada, URL real do runtime local e caminho absoluto do projeto não devem ser gravados nos logs estruturados.
 - Endpoints públicos de status não expõem caminho absoluto do projeto nem URL real do Ollama.
+- Detalhes brutos retornados pelo runtime local são sanitizados internamente e não fazem parte do contrato público de resposta.
 
 ## `GET /health`
 
@@ -180,7 +181,7 @@ Envie `Content-Type: application/json`.
 | `415` | `Content-Type` não JSON ou extensão de arquivo não permitida. |
 | `429` | Rate limit ou fila de geração cheia. |
 | `499` | Cliente encerrou a conexão antes do corpo completo ser lido; normalmente aparece em logs locais e pode não chegar ao cliente. |
-| `502` | Falha ao chamar o runtime local Ollama. |
+| `502` | Falha ao chamar o runtime local Ollama. O detalhe bruto do runtime não é exposto no contrato público. |
 | `504` | Timeout chamando o modelo local. |
 
 ## `POST /api/generate-stream`
@@ -218,4 +219,13 @@ Finalização bem-sucedida.
 ```text
 event: done
 data: {"requestId":"uuid","durationMs":1532,"cached":false,"done":true}
+```
+
+#### `error`
+
+Falha durante a geração após a abertura do stream. O evento informa uma mensagem segura e `requestId`; detalhes brutos do runtime local não são parte do contrato público.
+
+```text
+event: error
+data: {"requestId":"uuid","error":"Falha ao chamar Ollama em streaming."}
 ```

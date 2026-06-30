@@ -337,18 +337,24 @@ export const server = createServer(async (request, response) => {
   }
 });
 
+export function getStartupConsoleLines() {
+  return [
+    `Backend local ouvindo em http://${HOST}:${PORT}`,
+    `Modelo configurado: ${MODEL}`,
+    `Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`,
+    `Cache: ${ENABLE_PROMPT_CACHE ? 'ativo' : 'desativado'}, limite=${MAX_CACHE_ENTRIES}`,
+    `Leitura de arquivos: raiz=redacted, limite=${MAX_FILE_READ_BYTES} bytes`,
+    `Contexto por arquivos: máximo=${MAX_CONTEXT_FILES} arquivos, limite=${MAX_CONTEXT_BYTES} bytes`,
+    `Logs estruturados: nível=${LOG_LEVEL}, formato=json-lines`,
+    `Rate limit: ${ENABLE_RATE_LIMIT ? 'ativo' : 'desativado'}, limite=${RATE_LIMIT_MAX_REQUESTS}/${RATE_LIMIT_WINDOW_MS}ms`,
+    'Streaming: POST /api/generate-stream com Server-Sent Events'
+  ];
+}
+
 function startServer() {
   server.listen(PORT, HOST, () => {
     logger.info('server.started', { host: HOST, port: PORT, model: MODEL, ollamaUrl: OLLAMA_URL, generationConcurrency: GENERATION_CONCURRENCY, maxQueueSize: MAX_QUEUE_SIZE, promptCacheEnabled: ENABLE_PROMPT_CACHE, maxCacheEntries: MAX_CACHE_ENTRIES, projectRoot: PROJECT_ROOT, maxFileReadBytes: MAX_FILE_READ_BYTES, maxContextFiles: MAX_CONTEXT_FILES, maxContextBytes: MAX_CONTEXT_BYTES, logLevel: LOG_LEVEL, rateLimit: getRateLimitStatus() });
-    console.log(`Backend local ouvindo em http://${HOST}:${PORT}`);
-    console.log(`Modelo configurado: ${MODEL}`);
-    console.log(`Fila: concorrência=${GENERATION_CONCURRENCY}, limite=${MAX_QUEUE_SIZE}`);
-    console.log(`Cache: ${ENABLE_PROMPT_CACHE ? 'ativo' : 'desativado'}, limite=${MAX_CACHE_ENTRIES}`);
-    console.log(`Leitura de arquivos: raiz=${PROJECT_ROOT}, limite=${MAX_FILE_READ_BYTES} bytes`);
-    console.log(`Contexto por arquivos: máximo=${MAX_CONTEXT_FILES} arquivos, limite=${MAX_CONTEXT_BYTES} bytes`);
-    console.log(`Logs estruturados: nível=${LOG_LEVEL}, formato=json-lines`);
-    console.log(`Rate limit: ${ENABLE_RATE_LIMIT ? 'ativo' : 'desativado'}, limite=${RATE_LIMIT_MAX_REQUESTS}/${RATE_LIMIT_WINDOW_MS}ms`);
-    console.log('Streaming: POST /api/generate-stream com Server-Sent Events');
+    getStartupConsoleLines().forEach(line => console.log(line));
   });
 }
 

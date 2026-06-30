@@ -72,8 +72,16 @@ function getCacheStatus() {
   return promptCache.getStatus();
 }
 
-function getFileReadStatus() {
-  return { projectRoot: PROJECT_ROOT, maxFileReadBytes: MAX_FILE_READ_BYTES, maxContextFiles: MAX_CONTEXT_FILES, maxContextBytes: MAX_CONTEXT_BYTES, allowedFileExtensions: ALLOWED_FILE_EXTENSIONS };
+function getFileReadStatus({ exposeProjectRoot = false } = {}) {
+  const status = {
+    maxFileReadBytes: MAX_FILE_READ_BYTES,
+    maxContextFiles: MAX_CONTEXT_FILES,
+    maxContextBytes: MAX_CONTEXT_BYTES,
+    allowedFileExtensions: ALLOWED_FILE_EXTENSIONS
+  };
+
+  if (exposeProjectRoot) status.projectRoot = PROJECT_ROOT;
+  return status;
 }
 
 function getLogStatus() {
@@ -82,6 +90,25 @@ function getLogStatus() {
 
 function getRateLimitStatus() {
   return { ...rateLimiter.getStatus(), trustProxy: TRUST_PROXY, appliedToRoutes: ['POST /api/generate', 'POST /api/generate-stream', 'POST /api/read-file'] };
+}
+
+function getOllamaStatus() {
+  return { configured: Boolean(OLLAMA_URL), endpoint: 'redacted' };
+}
+
+function getPublicServiceStatus({ includeHealthStatus = false } = {}) {
+  return {
+    ...(includeHealthStatus ? { status: 'ok' } : {}),
+    service: 'teste-local-code-llm-backend',
+    model: MODEL,
+    ollama: getOllamaStatus(),
+    queue: getQueueStatus(),
+    cache: getCacheStatus(),
+    fileRead: getFileReadStatus(),
+    logging: getLogStatus(),
+    rateLimit: getRateLimitStatus(),
+    routes: ROUTES
+  };
 }
 
 function enforceRateLimit(request, response, { requestId, route }) {
@@ -242,11 +269,11 @@ export const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url || '/', `http://${request.headers.host || HOST}`);
     if (request.method === 'GET' && url.pathname === '/health') {
-      sendJson(response, 200, { status: 'ok', service: 'teste-local-code-llm-backend', model: MODEL, ollamaUrl: OLLAMA_URL, queue: getQueueStatus(), cache: getCacheStatus(), fileRead: getFileReadStatus(), logging: getLogStatus(), rateLimit: getRateLimitStatus(), routes: ROUTES });
+      sendJson(response, 200, getPublicServiceStatus({ includeHealthStatus: true }));
       return;
     }
     if (request.method === 'GET' && url.pathname === '/api/status') {
-      sendJson(response, 200, { service: 'teste-local-code-llm-backend', model: MODEL, ollamaUrl: OLLAMA_URL, queue: getQueueStatus(), cache: getCacheStatus(), fileRead: getFileReadStatus(), logging: getLogStatus(), rateLimit: getRateLimitStatus(), routes: ROUTES });
+      sendJson(response, 200, getPublicServiceStatus());
       return;
     }
     if (request.method === 'POST' && url.pathname === '/api/generate') {

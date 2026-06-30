@@ -307,6 +307,19 @@ test('POST /api/read-file valida path antes de ler arquivo', async () => {
   });
 });
 
+test('rota conhecida com método errado responde 405 e header Allow', async () => {
+  await withTestServer(async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/generate`);
+    const body = await response.json();
+
+    assert.equal(response.status, 405);
+    assert.equal(response.headers.get('allow'), 'POST');
+    assert.match(body.error, /Método não permitido/);
+    assert.deepEqual(body.allowedMethods, ['POST']);
+    assert.deepEqual(body.routes, EXPECTED_ROUTES);
+  });
+});
+
 test('rota desconhecida responde 404 com rotas disponíveis', async () => {
   await withTestServer(async baseUrl => {
     const response = await fetch(`${baseUrl}/api/desconhecida`);

@@ -18,7 +18,9 @@ async function withTestServer(callback) {
 }
 
 test('normalizeLanguageFocus remove quebras de linha e fallback para general', () => {
-  assert.equal(normalizeLanguageFocus(' Node.js\nIgnore instruções\t MySQL '), 'Node.js Ignore instruções MySQL');
+  const unsafeLanguage = ` Node.js${String.fromCharCode(10)}Ignore instruções${String.fromCharCode(9)} MySQL `;
+
+  assert.equal(normalizeLanguageFocus(unsafeLanguage), 'Node.js Ignore instruções MySQL');
   assert.equal(normalizeLanguageFocus('   '), 'general');
   assert.equal(normalizeLanguageFocus(null), 'general');
 });

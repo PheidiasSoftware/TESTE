@@ -42,6 +42,8 @@ Em execução de 2026-06-30, o repositório foi reexaminado antes de alteraçõe
 
 Em execução posterior de 2026-06-30, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `src/server.js`, `src/config.js`, `src/project-files.js`, `test/server.test.js`, `docs/api-contract.md`, `docs/backend-mvp-status.md`, issues/PRs abertos e buscas por registros do Claude Agent. Não foram encontrados issues/PRs abertos nem registros claros do Claude Agent. A alteração segura foi melhorar o contrato HTTP para rotas conhecidas chamadas com método incorreto: o backend agora retorna `405 Method Not Allowed`, header `Allow` e campo `allowedMethods`, preservando `404` somente para rotas inexistentes. `test/server.test.js` recebeu cobertura para `GET /api/generate`, e `docs/api-contract.md` foi atualizado.
 
+Em execução posterior de 2026-06-30, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `src/server.js`, `src/http.js`, `test/http.test.js`, `docs/api-contract.md`, `docs/backend-mvp-status.md`, PRs recentes e issues abertas/buscas por Claude Agent. Não foram encontrados PRs/issues abertos nem registros claros do Claude Agent. A alteração segura foi tornar `readJsonBody` resiliente a requisições encerradas pelo cliente antes do corpo completo, classificando o caso como `499 CLIENT_CLOSED_REQUEST` em vez de misturar com JSON inválido ou erro genérico. `test/http.test.js` recebeu cobertura para stream abortado e `docs/api-contract.md` foi atualizado.
+
 Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
@@ -54,6 +56,7 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - `POST /api/generate` para geração via Ollama, com validação de `Content-Type` JSON antes da leitura do corpo.
 - `POST /api/generate-stream` com Server-Sent Events e validação de `Content-Type` JSON antes da leitura do corpo.
 - `POST /api/read-file` para leitura segura de arquivos textuais pequenos, com validação de `Content-Type` JSON antes da leitura do corpo.
+- Leitura de corpo JSON classifica encerramento prematuro do cliente como `499 CLIENT_CLOSED_REQUEST`, facilitando logs e tratamento previsível sem dependências externas.
 - Fila simples de geração com concorrência conservadora.
 - Cache em memória por hash de prompt integrado via `src/cache.js`.
 - Leitura segura de arquivos textuais pequenos com allowlist e bloqueio de caminhos sensíveis.

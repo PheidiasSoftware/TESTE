@@ -18,6 +18,7 @@ A porta e host podem mudar via `HOST` e `PORT`.
 - Respostas JSON usam `cache-control: no-store`.
 - Rotas de streaming usam Server-Sent Events com `content-type: text/event-stream; charset=utf-8`.
 - Todas as rotas `POST` aceitam apenas corpo JSON com `Content-Type: application/json` ou media type compatível `+json`.
+- Rotas conhecidas chamadas com método HTTP incorreto retornam `HTTP 405` com header `Allow` e campo `allowedMethods`.
 - Rotas pesadas podem retornar `HTTP 429` quando o rate limit local é atingido.
 - Erros retornam pelo menos o campo `error`.
 - Quando disponível, respostas incluem `requestId` para correlação com logs locais.
@@ -172,6 +173,7 @@ Envie `Content-Type: application/json`.
 | --- | --- |
 | `400` | JSON inválido, `task` ausente, `contextFiles` não-array, item de `contextFiles` não-textual ou caminho malformado. |
 | `403` | Tentativa de ler caminho fora do projeto ou pasta bloqueada. |
+| `405` | Rota conhecida chamada com método HTTP incorreto; a resposta inclui `Allow` e `allowedMethods`. |
 | `413` | Payload ou arquivo acima do limite configurado. |
 | `415` | `Content-Type` não JSON ou extensão de arquivo não permitida. |
 | `429` | Rate limit ou fila de geração cheia. |
@@ -286,4 +288,4 @@ Clientes simples em Node.js, Flutter Desktop ou scripts PowerShell devem:
 2. enviar tarefas curtas para `/api/generate`;
 3. usar `/api/generate-stream` quando quiserem resposta progressiva;
 4. usar `/api/read-file` somente com caminhos relativos selecionados pelo usuário;
-5. tratar `429`, `502` e `504` com mensagens claras e opção de tentar novamente.
+5. tratar `405`, `429`, `502` e `504` com mensagens claras e opção de tentar novamente.

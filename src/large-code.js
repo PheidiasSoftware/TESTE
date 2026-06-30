@@ -83,6 +83,18 @@ export function normalizeStringList(value, {
   });
 }
 
+export function normalizeSuggestionStringList(value, {
+  maxItems = DEFAULT_MAX_FILES,
+  maxItemChars = 500
+} = {}) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .slice(0, maxItems)
+    .map(item => normalizeLargeCodeText(item, { maxChars: maxItemChars }))
+    .filter(Boolean);
+}
+
 export function chunkList(items, size) {
   const safeSize = clampSafeInteger(size, { fallback: DEFAULT_FILES_PER_STEP, minimum: 1, maximum: 50 });
   const chunks = [];

@@ -36,7 +36,8 @@ const EXPECTED_ROUTES = [
   'GET /api/status',
   'POST /api/generate',
   'POST /api/generate-stream',
-  'POST /api/read-file'
+  'POST /api/read-file',
+  'POST /api/large-code-plan'
 ];
 
 function assertPublicRuntimeContract(body) {
@@ -52,12 +53,18 @@ function assertPublicRuntimeContract(body) {
   assert.deepEqual(body.rateLimit.appliedToRoutes, [
     'POST /api/generate',
     'POST /api/generate-stream',
-    'POST /api/read-file'
+    'POST /api/read-file',
+    'POST /api/large-code-plan'
   ]);
   assert.equal(typeof body.ollama.configured, 'boolean');
   assert.equal(body.ollama.endpoint, 'redacted');
   assert.equal(Object.hasOwn(body, 'ollamaUrl'), false);
   assert.equal(Object.hasOwn(body.fileRead, 'projectRoot'), false);
+  assert.equal(body.largeGeneration.mode, 'chunked-large-code-generation');
+  assert.equal(body.largeGeneration.endpoint, 'POST /api/large-code-plan');
+  assert.equal(typeof body.largeGeneration.maxLargePlanFiles, 'number');
+  assert.equal(typeof body.largeGeneration.maxLargePlanSteps, 'number');
+  assert.equal(typeof body.largeGeneration.maxFilesPerContextBatch, 'number');
 }
 
 test('buildCodingPrompt inclui foco, contexto e tarefa sem depender do Ollama', () => {
@@ -303,6 +310,49 @@ test('POST /api/read-file valida path antes de ler arquivo', async () => {
 
     assert.equal(response.status, 403);
     assert.match(body.error, /fora da pasta do projeto/);
+    assert.equal(typeof body.requestId, 'string');
+  });
+});
+
+test('POST /api/large-code-plan cria plano de geração grande sem chamar Ollama', async () => {
+  await withTestServer(async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/large-code-plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        language: 'Node.js',
+        task: 'Criar CRUD grande de clientes em várias partes',
+        contextFiles: ['src/server.js', 'src/config.js', 'src/http.js'],
+        targetFiles: ['src/modules/customers/routes.js', 'src/modules/customers/service.js'],
+        maxFilesPerStep: 2,
+        maxSteps: 8
+      })
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.mode, 'chunked-large-code-generation');
+    assert.equal(body.language, 'Node.js');
+    assert.equal(body.totals.contextFiles, 3);
+    assert.equal(body.totals.targetFiles, 2);
+    assert.ok(body.steps.length >= 3);
+    assert.equal(body.steps[0].type, 'architecture-plan');
+    assert.equal(body.steps.at(-1).type, 'integration-review');
+    assert.equal(typeof body.requestId, 'string');
+  });
+});
+
+test('POST /api/large-code-plan valida task obrigatória', async () => {
+  await withTestServer(async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/large-code-plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ language: 'Node.js' })
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.match(body.error, /task precisa ser texto/);
     assert.equal(typeof body.requestId, 'string');
   });
 });

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import {
   DEFAULT_ALLOWED_FILE_EXTENSIONS,
+  RUNTIME_NUMERIC_LIMITS,
   getAllowedFileExtensions,
   loadConfig,
   normalizeAllowedFileExtension,
@@ -11,6 +12,7 @@ import {
   normalizeModelName,
   normalizeOllamaUrl,
   parseBooleanFlag,
+  parseBoundedInteger,
   parseInteger,
   parsePort
 } from '../src/config.js';
@@ -78,6 +80,15 @@ test('parseInteger accepts only complete safe integer environment values', () =>
   assert.equal(parseInteger(undefined, 7), 7);
 });
 
+test('parseBoundedInteger enforces fallback, minimum and maximum values', () => {
+  const limit = { fallback: 10, minimum: 2, maximum: 20 };
+
+  assert.equal(parseBoundedInteger('15', limit), 15);
+  assert.equal(parseBoundedInteger('1', limit), 2);
+  assert.equal(parseBoundedInteger('999', limit), 20);
+  assert.equal(parseBoundedInteger('bad', limit), 10);
+});
+
 test('loadConfig falls back when numeric safety limits are partial or unsafe integers', () => {
   const config = loadConfig({
     MAX_BODY_BYTES: '65536x',
@@ -88,6 +99,34 @@ test('loadConfig falls back when numeric safety limits are partial or unsafe int
   assert.equal(config.MAX_BODY_BYTES, 65536);
   assert.equal(config.REQUEST_TIMEOUT_MS, 120000);
   assert.equal(config.MAX_QUEUE_SIZE, 4);
+});
+
+test('loadConfig clamps runtime numeric limits for weak local PCs', () => {
+  const config = loadConfig({
+    MAX_BODY_BYTES: '999999999',
+    REQUEST_TIMEOUT_MS: '999999999',
+    MAX_QUEUE_SIZE: '999999999',
+    GENERATION_CONCURRENCY: '999999999',
+    MAX_CACHE_ENTRIES: '999999999',
+    MAX_FILE_READ_BYTES: '999999999',
+    MAX_CONTEXT_FILES: '999999999',
+    MAX_CONTEXT_BYTES: '999999999',
+    RATE_LIMIT_WINDOW_MS: '999999999',
+    RATE_LIMIT_MAX_REQUESTS: '999999999',
+    RATE_LIMIT_MAX_CLIENTS: '999999999'
+  });
+
+  assert.equal(config.MAX_BODY_BYTES, RUNTIME_NUMERIC_LIMITS.MAX_BODY_BYTES.maximum);
+  assert.equal(config.REQUEST_TIMEOUT_MS, RUNTIME_NUMERIC_LIMITS.REQUEST_TIMEOUT_MS.maximum);
+  assert.equal(config.MAX_QUEUE_SIZE, RUNTIME_NUMERIC_LIMITS.MAX_QUEUE_SIZE.maximum);
+  assert.equal(config.GENERATION_CONCURRENCY, RUNTIME_NUMERIC_LIMITS.GENERATION_CONCURRENCY.maximum);
+  assert.equal(config.MAX_CACHE_ENTRIES, RUNTIME_NUMERIC_LIMITS.MAX_CACHE_ENTRIES.maximum);
+  assert.equal(config.MAX_FILE_READ_BYTES, RUNTIME_NUMERIC_LIMITS.MAX_FILE_READ_BYTES.maximum);
+  assert.equal(config.MAX_CONTEXT_FILES, RUNTIME_NUMERIC_LIMITS.MAX_CONTEXT_FILES.maximum);
+  assert.equal(config.MAX_CONTEXT_BYTES, RUNTIME_NUMERIC_LIMITS.MAX_CONTEXT_BYTES.maximum);
+  assert.equal(config.RATE_LIMIT_WINDOW_MS, RUNTIME_NUMERIC_LIMITS.RATE_LIMIT_WINDOW_MS.maximum);
+  assert.equal(config.RATE_LIMIT_MAX_REQUESTS, RUNTIME_NUMERIC_LIMITS.RATE_LIMIT_MAX_REQUESTS.maximum);
+  assert.equal(config.RATE_LIMIT_MAX_CLIENTS, RUNTIME_NUMERIC_LIMITS.RATE_LIMIT_MAX_CLIENTS.maximum);
 });
 
 test('loadConfig normalizes invalid port values to the safe local default', () => {

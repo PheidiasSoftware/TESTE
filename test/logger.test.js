@@ -28,6 +28,24 @@ test('redactForLog oculta campos sensíveis em objetos aninhados', () => {
   assert.equal(result.items[1].name, 'safe');
 });
 
+test('redactForLog oculta caminhos locais e URLs operacionais sensíveis', () => {
+  const result = redactForLog({
+    projectRoot: 'C:/Users/marcelo/projetos/TESTE',
+    ollamaUrl: 'http://127.0.0.1:11434',
+    baseUrl: 'http://localhost:11434',
+    model: 'qwen2.5-coder:1.5b-instruct',
+    queue: {
+      activeGenerations: 1
+    }
+  });
+
+  assert.equal(result.projectRoot, '[redacted]');
+  assert.equal(result.ollamaUrl, '[redacted]');
+  assert.equal(result.baseUrl, '[redacted]');
+  assert.equal(result.model, 'qwen2.5-coder:1.5b-instruct');
+  assert.equal(result.queue.activeGenerations, 1);
+});
+
 test('redactForLog limita strings longas e arrays grandes para preservar memória', () => {
   const longText = 'x'.repeat(400);
   const result = redactForLog({

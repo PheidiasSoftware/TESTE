@@ -4,13 +4,52 @@
 
 O backend precisa ajudar a gerar muito código, mas o alvo continua sendo PC fraco com 8 GB de RAM e sem GPU. Por isso, a abordagem segura não é enviar um contexto gigante de uma vez para o modelo local. A abordagem correta é gerar por etapas, com contexto em lotes e memória resumida entre chamadas.
 
-## Novo endpoint
+## Endpoint principal
 
 ```http
 POST /api/large-code-plan
 ```
 
 Esse endpoint não chama o Ollama. Ele cria um plano de execução para uma tarefa grande, dividindo o trabalho em etapas pequenas. Cada etapa pode ser enviada depois para `POST /api/generate-stream`.
+
+## Detecção automática em `/api/generate`
+
+Quando alguém chama `POST /api/generate` ou `POST /api/generate-stream` com uma tarefa que parece grande, o backend não tenta chamar o Ollama diretamente. Ele responde `422` sugerindo o uso de `/api/large-code-plan`.
+
+A detecção considera sinais como:
+
+- tarefa muito longa;
+- muitos arquivos em `contextFiles`;
+- presença de `targetFiles`;
+- contexto truncado por limite de bytes;
+- termos como `CRUD completo`, `sistema completo`, `projeto completo`, `contexto gigante`, `muitos arquivos` ou `grande quantidade de código`.
+
+Exemplo de resposta:
+
+```json
+{
+  "error": "Esta tarefa parece grande para uma geração única. Use /api/large-code-plan para dividir em etapas e depois gere cada etapa com /api/generate-stream.",
+  "largeCodeSuggestion": {
+    "isLarge": true,
+    "reasons": ["many-context-files", "target-files-present", "large-task-keyword"],
+    "recommendedEndpoint": "POST /api/large-code-plan",
+    "bypassFlag": "forceSingleGeneration",
+    "suggestedRequest": {
+      "endpoint": "POST /api/large-code-plan"
+    }
+  }
+}
+```
+
+Se o usuário realmente quiser forçar uma única geração, pode enviar:
+
+```json
+{
+  "forceSingleGeneration": true
+}
+```
+
+Esse bypass deve ser usado com cuidado em PC fraco.
 
 ## Por que não mandar tudo de uma vez?
 
@@ -113,6 +152,7 @@ Invoke-RestMethod `
 - O backend continua sem escrever arquivos automaticamente.
 - A geração real continua passando pela fila e pelo streaming.
 - O contexto por etapa continua limitado para proteger memória.
+- A detecção automática evita tentar gerar um projeto inteiro em uma resposta única.
 
 ## Limitação importante
 

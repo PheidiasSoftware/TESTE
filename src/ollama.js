@@ -47,6 +47,17 @@ export function sanitizeOllamaOptions(options = {}) {
   return sanitized;
 }
 
+export function sanitizeUpstreamErrorDetail(value, { maxLength = 300 } = {}) {
+  const text = typeof value === 'string'
+    ? value
+        .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    : '';
+
+  return text ? text.slice(0, maxLength) : undefined;
+}
+
 export function parseOllamaStreamLine(line) {
   const trimmed = typeof line === 'string' ? line.trim() : '';
   if (!trimmed) return null;
@@ -101,7 +112,7 @@ export function createOllamaClient({
       const detail = await response.text().catch(() => '');
       throw Object.assign(new Error('Falha ao chamar Ollama.'), {
         statusCode: 502,
-        detail: detail.slice(0, 500)
+        detail: sanitizeUpstreamErrorDetail(detail)
       });
     }
 
@@ -125,7 +136,7 @@ export function createOllamaClient({
       const detail = await response.text().catch(() => '');
       throw Object.assign(new Error('Falha ao chamar Ollama em streaming.'), {
         statusCode: 502,
-        detail: detail.slice(0, 500)
+        detail: sanitizeUpstreamErrorDetail(detail)
       });
     }
 

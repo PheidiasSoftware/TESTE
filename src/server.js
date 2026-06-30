@@ -11,7 +11,11 @@ import {
   sendJson,
   sendServerEvent
 } from './http.js';
-import { assessLargeCodeRequest, buildLargeCodePlan } from './large-code.js';
+import {
+  assessLargeCodeRequest,
+  buildLargeCodePlan,
+  normalizeSuggestionStringList
+} from './large-code.js';
 import { createStructuredLogger } from './logger.js';
 import { createOllamaClient } from './ollama.js';
 import {
@@ -176,8 +180,8 @@ function buildLargeCodeSuggestion({ assessment, task, language, body }) {
       body: {
         task: task.slice(0, 8000),
         language,
-        contextFiles: Array.isArray(body.contextFiles) ? body.contextFiles : [],
-        targetFiles: Array.isArray(body.targetFiles) ? body.targetFiles : [],
+        contextFiles: normalizeSuggestionStringList(body.contextFiles, { maxItems: MAX_LARGE_PLAN_FILES }),
+        targetFiles: normalizeSuggestionStringList(body.targetFiles, { maxItems: MAX_LARGE_PLAN_FILES }),
         previousStepMemory: typeof body.previousStepMemory === 'string' ? body.previousStepMemory.slice(0, 2000) : undefined
       }
     }
@@ -224,7 +228,7 @@ export function buildCodingPrompt({ task, language = 'general', context = '' }) 
     'Você é uma SLM local focada em programação para PC fraco, sem GPU.',
     'Responda de forma objetiva, segura, com código simples e pouca memória.',
     'Priorize Node.js, Flutter/Dart e MySQL quando fizer sentido.',
-    'Não invente arquivos que não foram informados e não sugira comandos destrutivos.',
+    'Evite inventar arquivos que não foram informados e evite comandos perigosos.',
     `Linguagem/foco: ${language}`,
     context ? `Contexto do projeto:\n${context}` : 'Contexto do projeto: não fornecido.',
     `Tarefa:\n${task}`

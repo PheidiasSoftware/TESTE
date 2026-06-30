@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizeLanguageFocus, server } from '../src/server.js';
+import { buildCodingPrompt, normalizeLanguageFocus, server } from '../src/server.js';
 
 async function withTestServer(callback) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -30,6 +30,19 @@ test('normalizeLanguageFocus limita foco técnico para evitar prompt metadata lo
 
   assert.equal(normalized.length, 80);
   assert.match(normalized, /^Dart Dart/);
+});
+
+test('buildCodingPrompt usa language normalizado em uma única linha de metadados', () => {
+  const normalizedLanguage = normalizeLanguageFocus(` Flutter${String.fromCharCode(10)}Dart${String.fromCharCode(9)}MySQL `);
+  const prompt = buildCodingPrompt({
+    task: 'Revise uma API local simples.',
+    language: normalizedLanguage,
+    context: ''
+  });
+
+  assert.match(prompt, /Linguagem\/foco: Flutter Dart MySQL/);
+  assert.doesNotMatch(prompt, /Linguagem\/foco: Flutter\nDart/);
+  assert.match(prompt, /Tarefa:\nRevise uma API local simples\./);
 });
 
 test('POST /api/generate rejeita task vazia ou somente espaços antes de chamar Ollama', async () => {

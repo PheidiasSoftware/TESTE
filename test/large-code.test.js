@@ -10,7 +10,7 @@ import {
 } from '../src/large-code.js';
 
 test('normalizeLargeCodeText limpa controles e exige task quando requerido', () => {
-  assert.equal(normalizeLargeCodeText('linha 1\r\nlinha\u0000 2', { maxChars: 100 }), 'linha 1\nlinha  2');
+  assert.equal(normalizeLargeCodeText('linha 1\r\nlinha\u0000 2', { maxChars: 100 }), 'linha 1\nlinha 2');
   assert.equal(normalizeLargeCodeText('abcdef', { maxChars: 3 }), 'abc');
 
   assert.throws(

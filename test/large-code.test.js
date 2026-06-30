@@ -7,7 +7,8 @@ import {
   chunkList,
   clampSafeInteger,
   normalizeLargeCodeText,
-  normalizeStringList
+  normalizeStringList,
+  normalizeSuggestionStringList
 } from '../src/large-code.js';
 
 test('normalizeLargeCodeText limpa controles e exige task quando requerido', () => {
@@ -32,6 +33,16 @@ test('normalizeStringList valida arrays e limites', () => {
     () => normalizeStringList(['a', 'b', 'c'], { fieldName: 'files', maxItems: 2 }),
     error => error.statusCode === 400 && /no máximo 2/.test(error.message)
   );
+});
+
+test('normalizeSuggestionStringList sanitiza listas para resposta sugerida sem quebrar fluxo', () => {
+  assert.deepEqual(
+    normalizeSuggestionStringList([' src/server.js ', null, 'a'.repeat(600), '\u0000test/server.test.js'], { maxItems: 4, maxItemChars: 20 }),
+    ['src/server.js', 'aaaaaaaaaaaaaaaaaaaa', 'test/server.test.js']
+  );
+
+  assert.deepEqual(normalizeSuggestionStringList('src/server.js'), []);
+  assert.deepEqual(normalizeSuggestionStringList(['a.js', 'b.js', 'c.js'], { maxItems: 2 }), ['a.js', 'b.js']);
 });
 
 test('chunkList divide contexto grande em lotes pequenos', () => {

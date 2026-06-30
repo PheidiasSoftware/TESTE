@@ -57,7 +57,10 @@ function createAbortedMockRequest() {
 test('SECURITY_HEADERS define proteções HTTP leves e estáveis', () => {
   assert.deepEqual(SECURITY_HEADERS, {
     'x-content-type-options': 'nosniff',
-    'referrer-policy': 'no-referrer'
+    'x-frame-options': 'DENY',
+    'referrer-policy': 'no-referrer',
+    'cross-origin-resource-policy': 'same-origin',
+    'permissions-policy': 'camera=(), microphone=(), geolocation=()'
   });
 });
 
@@ -70,7 +73,10 @@ test('sendJson responde JSON sem cache persistente e com headers de segurança',
   assert.equal(response.headers['content-type'], 'application/json; charset=utf-8');
   assert.equal(response.headers['cache-control'], 'no-store');
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
+  assert.equal(response.headers['cross-origin-resource-policy'], 'same-origin');
+  assert.equal(response.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
   assert.equal(response.headers['x-test'], '1');
   assert.equal(response.ended, true);
   assert.deepEqual(JSON.parse(response.chunks.join('')), { ok: true });
@@ -93,7 +99,10 @@ test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {
   assert.equal(response.headers['content-type'], 'text/event-stream; charset=utf-8');
   assert.equal(response.headers['cache-control'], 'no-store, no-transform');
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
+  assert.equal(response.headers['cross-origin-resource-policy'], 'same-origin');
+  assert.equal(response.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
   assert.equal(response.headers.connection, 'keep-alive');
 });
 

@@ -28,7 +28,7 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1`, `scripts/start-windows.ps1` e `test/config.test.js`; issues e PRs abertos foram consultados e não retornaram resultados; a busca por registros claros de Claude Agent também não retornou resultados. A alteração segura foi alinhar explicitamente `MAX_BODY_BYTES=65536` e `REQUEST_TIMEOUT_MS=120000` nos helpers Windows e na CI, reduzindo variação operacional entre teste offline, start local e workflow remoto sem mexer no roteamento do backend.
 
-Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `scripts/test-windows.ps1`, `scripts/start-windows.ps1` e `test/config.test.js`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A alteração segura foi endurecer os helpers Windows para validar disponibilidade de comandos antes de executá-los: `scripts/test-windows.ps1` agora falha com mensagem clara se `node` ou `npm` não estiverem no PATH, e `scripts/start-windows.ps1` falha com mensagem clara se `node` não estiver no PATH. A documentação de validação local foi atualizada para registrar esse comportamento.
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `test/config.test.js`, `scripts/test-windows.ps1` e `scripts/start-windows.ps1`; também foi consultada a lista de PRs recentes, sem resultados. Não foram encontrados registros claros do Claude Agent. A alteração segura foi endurecer os helpers Windows para validar disponibilidade de comandos antes de executá-los: `scripts/test-windows.ps1` agora falha com mensagem clara se `node` ou `npm` não estiverem no PATH, e `scripts/start-windows.ps1` falha com mensagem clara se `node` não estiver no PATH. A documentação de validação local foi atualizada para registrar esse comportamento.
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `docs/local-validation.md`, `src/server.js`, `src/config.js`, `test/config.test.js`, `scripts/test-windows.ps1` e `scripts/start-windows.ps1`; issues abertas e PRs recentes foram consultados e não retornaram resultados; a busca textual não encontrou registros claros do Claude Agent. A alteração segura foi endurecer o parsing de `PORT` em `src/config.js`: agora a porta só é aceita dentro do intervalo TCP válido `1..65535`, caindo para `3131` em valores inválidos. `test/config.test.js` recebeu cobertura para portas válidas, inválidas e fallback.
 
@@ -36,14 +36,16 @@ Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de a
 
 Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `.github/workflows/node-test.yml`, `docs/backend-mvp-status.md`, `src/server.js`, `src/http.js`, `src/config.js`, `test/http.test.js` e `test/config.test.js`; issues e PRs abertos foram consultados e não retornaram resultados; a busca textual não encontrou registros claros do Claude Agent. A alteração segura foi endurecer `parseInteger` em `src/config.js` para aceitar somente inteiros completos e seguros, evitando que valores parciais como `65536x`, decimais ou notação científica sejam aceitos silenciosamente em limites de ambiente. `test/config.test.js` recebeu cobertura dedicada.
 
+Em execução posterior de 2026-06-29, o repositório foi reexaminado antes de alterações. Foram lidos `README.md`, `package.json`, `src/server.js`, `src/config.js`, `test/server.test.js`, `test/config.test.js`, `docs/backend-mvp-status.md` e registros de memória recentes; PRs recentes foram consultados, sem resultados; a busca textual não encontrou registros claros do Claude Agent. A alteração segura foi sanitizar o contrato público de `GET /health` e `GET /api/status`: os endpoints não expõem mais `PROJECT_ROOT` nem a URL real do Ollama, mantendo apenas `ollama.configured` e `ollama.endpoint=redacted`. `test/server.test.js` cobre a ausência de `ollamaUrl` e `fileRead.projectRoot` nos endpoints públicos.
+
 Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde, a recomendação é não adicionar recursos grandes nem fazer refatorações amplas em `src/server.js`.
 
 ## Critérios atendidos
 
 - Projeto Node.js 20+ sem dependências externas pesadas.
 - Servidor HTTP nativo escutando `127.0.0.1` por padrão.
-- `GET /health` para diagnóstico básico.
-- `GET /api/status` para métricas locais.
+- `GET /health` para diagnóstico básico com contrato público sanitizado, sem expor `PROJECT_ROOT` nem URL real do Ollama.
+- `GET /api/status` para métricas locais com contrato público sanitizado, sem expor `PROJECT_ROOT` nem URL real do Ollama.
 - `POST /api/generate` para geração via Ollama.
 - `POST /api/generate-stream` com Server-Sent Events.
 - `POST /api/read-file` para leitura segura de arquivos textuais pequenos.
@@ -63,67 +65,10 @@ Até a confirmação objetiva de `npm test`, `npm run test:windows` ou CI verde,
 - CI leve com Node.js 20 e ambiente offline alinhado ao helper Windows para rate limit, proxy confiável desativado e logs silenciosos.
 - Documentação de arquitetura, contrato da API local, streaming, rate limit, modelos leves, integração de clientes, validação local e revisão de prontidão do MVP.
 - README principal com links para arquitetura, contrato da API, status do MVP, revisão de prontidão, streaming, rate limit, seleção de modelos, integração de clientes e validação local.
-- Helpers de cliente Ollama em `src/ollama.js` para montagem de payload, parse de JSONL streaming, chamada não-streaming e leitura de stream, com testes isolados por `fetchImpl` fake.
-- `src/server.js` integrado ao cliente Ollama de `src/ollama.js`, removendo duplicação direta de payload/parsing de streaming no servidor.
-- `src/server.js` integrado aos helpers HTTP de `src/http.js` para JSON, SSE e leitura de corpo com `MAX_BODY_BYTES`, reduzindo duplicação local.
-- Fila de geração extraída para `src/generation-queue.js`, com testes próprios para limite de fila, concorrência conservadora, falhas, configuração inválida e job inválido.
-- `src/server.js` integrado ao módulo `src/generation-queue.js`, mantendo reexport para compatibilidade com testes existentes.
-- Leitura segura de arquivos e montagem de contexto extraídas para `src/project-files.js`, com testes próprios para caminho seguro, bloqueios, limite de tamanho, contexto por arquivos e entradas inválidas.
-- `src/server.js` integrado ao módulo `src/project-files.js`, mantendo reexports para compatibilidade com testes existentes.
-- Logging estruturado extraído para `src/logger.js`, com testes próprios para redaction, truncamento conservador, níveis de log e modo `silent`.
-- `src/server.js` integrado ao módulo `src/logger.js`, mantendo reexports para compatibilidade com testes e uso técnico futuro.
-- Guia `docs/local-validation.md` criado para validação mínima sem Ollama, health/status, entrada inválida, leitura segura, teste opcional com Ollama e checklist antes de novas mudanças no backend.
-- Guia `docs/local-validation.md` ampliado com validação por CI leve, critérios mínimos para continuar refatorando `src/server.js` e orientação para tratar ausência de checks como ausência de evidência, não como falha.
-- Guia `docs/local-validation.md` atualizado com `npm run test:windows` como alternativa Windows para validação offline, incluindo checagem de raiz do repositório, disponibilidade de `node`/`npm` e Node.js 20+.
-- Guia `docs/local-validation.md` atualizado com o comportamento endurecido de `npm run start:windows`, incluindo checagem de raiz do repositório, disponibilidade de `node`, Node.js 20+ e padrões explícitos antes do start.
-- Guia `docs/local-validation.md` atualizado com alinhamento explícito de limites de payload e timeout entre CI, `npm run test:windows` e `npm run start:windows`.
-- Guia `docs/mvp-readiness-review.md` criado para registrar critérios de MVP atendidos, pendências de validação e fronteiras de escopo.
-- `test/server.test.js` agora valida contrato público mínimo de `logging` e `rateLimit` em `GET /health` e `GET /api/status`, reduzindo risco de regressão nos campos usados por clientes locais.
-- `src/rate-limit.js` agora expõe `trackedClients` no status público, preservando `activeClients` como alias de compatibilidade; `test/rate-limit.test.js` cobre essa compatibilidade.
-- `test/config.test.js` cobre normalização segura de `LOG_LEVEL`, flags booleanas, parsing de `PORT`, normalização segura de `OLLAMA_URL` e parsing estrito de inteiros de ambiente.
-- Verificação operacional do commit `f45af224071e6b633954b199072b12d370546f4e` registrada: sem status/CI disponível pelo conector no momento da consulta, mantendo validação final como pendência explícita.
 
-## Critérios parcialmente atendidos
+## Pendências
 
-- Modularização: já existem módulos auxiliares como `src/config.js`, `src/http.js`, `src/rate-limit.js`, `src/ollama.js`, `src/cache.js`, `src/generation-queue.js`, `src/project-files.js` e `src/logger.js`, mas `src/server.js` ainda concentra roteamento, handlers HTTP e composição de resposta.
-- Cliente Ollama: `src/ollama.js` está integrado ao servidor; falta apenas validação final por `npm test`/CI após a alteração.
-- Helpers HTTP: `src/http.js` está integrado ao servidor; falta apenas validação final por `npm test`/CI após a alteração.
-- Cache: `src/cache.js` está integrado ao servidor e mantém testes próprios; manter este item sob observação apenas para validação de CI/local após mudanças no `src/server.js`.
-- Fila de geração: `src/generation-queue.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
-- Leitura segura: `src/project-files.js` está integrada ao servidor; falta validação final por `npm test`/CI após a extração.
-- Logging: `src/logger.js` está integrado ao módulo `src/logger.js`; falta validação final por `npm test`/CI após a extração.
-- Configuração: `src/config.js` possui normalização de logs, flags booleanas, porta TCP, URL do Ollama e parsing estrito de inteiros, mas ainda precisa de validação final por `npm test`/CI após a alteração mais recente.
-- Validação local: existe guia documentado em `docs/local-validation.md` e helpers `npm run test:windows`/`npm run start:windows`, mas ainda é necessário executar `npm test`, `npm run test:windows` ou confirmar CI verde.
-- Testes de contrato público: cobertura de `logging` e `rateLimit` foi adicionada; foi corrigida a compatibilidade do campo `trackedClients`, mas ainda precisa de validação por `npm test`/CI.
-- CI/status remoto: a CI agora possui ambiente de teste mais completo, mas ainda é necessário confirmar execução verde no commit mais recente.
-
-## Não faz parte do MVP backend
-
-- Frontend completo.
-- Execução automática de código gerado.
-- Sandbox de execução de código.
-- Treinamento ou fine-tuning de modelo.
-- Download automático de modelos grandes.
-- Banco de dados, Redis ou fila persistente.
-- Exposição pública da API por padrão.
-
-## Riscos atuais
-
-- `src/server.js` ainda tem responsabilidade alta; alterações grandes nesse arquivo aumentam risco de regressão.
-- A validação final de `npm test` depende de execução local ou CI, pois o conector GitHub não executa os testes diretamente.
-- O ambiente usado nas últimas execuções bloqueou checkout local do repositório, então não houve como executar `npm test` fora do GitHub Actions.
-- Ainda não existe evidência objetiva de CI verde para o commit mais recente desta execução.
-- Uso real depende do Ollama instalado, rodando e com modelo leve disponível.
-- Em CPU fraca, respostas podem ser lentas; os limites padrão devem continuar conservadores.
-
-## Próximas tarefas seguras recomendadas
-
-1. Confirmar CI verde no GitHub Actions para o commit mais recente.
-2. Executar o checklist de `docs/local-validation.md`, começando por `npm test` ou `npm run test:windows` sem Ollama.
-3. Se testes/CI estiverem verdes, registrar o backend como MVP funcional completo.
-4. Só depois disso extrair roteamento/handlers para módulo dedicado, em alteração pequena.
-5. Em seguida, tratar melhorias adicionais como hardening pós-MVP, não como requisito para o MVP inicial.
-
-## Decisão operacional
-
-O backend está funcionalmente pronto para o MVP em termos de implementação e documentação. A prioridade agora é validação objetiva, redução de risco técnico e preservação da compatibilidade com agentes futuros, incluindo Claude Agent se aparecerem registros dele no repositório.
+- Confirmar `npm test`, `npm run test:windows` ou CI verde no commit mais recente.
+- Evitar novas funcionalidades grandes até haver evidência objetiva de testes passando.
+- Frontend/cliente visual ainda depende de decisão do usuário.
+- Integração opcional com outros runtimes leves, como llama.cpp direto, ainda depende de decisão futura.

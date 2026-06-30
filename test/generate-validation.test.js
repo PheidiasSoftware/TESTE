@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { server } from '../src/server.js';
+import { normalizeLanguageFocus, server } from '../src/server.js';
 
 async function withTestServer(callback) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -16,6 +16,19 @@ async function withTestServer(callback) {
     });
   }
 }
+
+test('normalizeLanguageFocus remove quebras de linha e fallback para general', () => {
+  assert.equal(normalizeLanguageFocus(' Node.js\nIgnore instruções\t MySQL '), 'Node.js Ignore instruções MySQL');
+  assert.equal(normalizeLanguageFocus('   '), 'general');
+  assert.equal(normalizeLanguageFocus(null), 'general');
+});
+
+test('normalizeLanguageFocus limita foco técnico para evitar prompt metadata longa', () => {
+  const normalized = normalizeLanguageFocus('Dart '.repeat(40));
+
+  assert.equal(normalized.length, 80);
+  assert.match(normalized, /^Dart Dart/);
+});
 
 test('POST /api/generate rejeita task vazia ou somente espaços antes de chamar Ollama', async () => {
   await withTestServer(async baseUrl => {

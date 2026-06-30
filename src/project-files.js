@@ -73,6 +73,16 @@ export function truncateUtf8ToBytes(value, maxBytes) {
   return buffer.subarray(0, limit).toString('utf8');
 }
 
+export function normalizeManualContext(value, maxBytes) {
+  if (typeof value !== 'string') return '';
+
+  const normalized = value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]+/g, ' ');
+
+  return truncateUtf8ToBytes(normalized, maxBytes);
+}
+
 export async function readProjectFile({ path, projectRoot, maxBytes, allowedFileExtensions = [] } = {}) {
   const safeFile = validateSafeProjectFilePath({
     requestedPath: path,
@@ -113,7 +123,7 @@ export async function buildContextFromFiles({
   allowedFileExtensions = []
 } = {}) {
   if (contextFiles === undefined || contextFiles === null) {
-    const safeContext = typeof context === 'string' ? truncateUtf8ToBytes(context, maxContextBytes) : '';
+    const safeContext = normalizeManualContext(context, maxContextBytes);
     return {
       context: safeContext,
       files: [],
@@ -127,7 +137,7 @@ export async function buildContextFromFiles({
   }
 
   if (contextFiles.length === 0) {
-    const safeContext = typeof context === 'string' ? truncateUtf8ToBytes(context, maxContextBytes) : '';
+    const safeContext = normalizeManualContext(context, maxContextBytes);
     return {
       context: safeContext,
       files: [],
@@ -140,7 +150,7 @@ export async function buildContextFromFiles({
     throw Object.assign(new Error(`contextFiles aceita no máximo ${maxFiles} arquivo(s).`), { statusCode: 400 });
   }
 
-  const safeContext = typeof context === 'string' ? truncateUtf8ToBytes(context, maxContextBytes) : '';
+  const safeContext = normalizeManualContext(context, maxContextBytes);
   const parts = safeContext ? [safeContext] : [];
   const files = [];
   let totalBytes = Buffer.byteLength(parts.join('\n'), 'utf8');

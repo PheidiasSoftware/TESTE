@@ -72,6 +72,13 @@ curl http://127.0.0.1:3131/health
     "maxContextBytes": 12000,
     "allowedFileExtensions": [".css", ".dart", ".html", ".js", ".json", ".md", ".ps1", ".sql", ".ts", ".txt", ".yaml", ".yml"]
   },
+  "largeGeneration": {
+    "mode": "chunked-large-code-generation",
+    "endpoint": "POST /api/large-code-plan",
+    "maxLargePlanFiles": 50,
+    "maxLargePlanSteps": 20,
+    "maxFilesPerContextBatch": 4
+  },
   "logging": {
     "level": "info",
     "format": "json-lines",
@@ -87,7 +94,8 @@ curl http://127.0.0.1:3131/health
     "appliedToRoutes": [
       "POST /api/generate",
       "POST /api/generate-stream",
-      "POST /api/read-file"
+      "POST /api/read-file",
+      "POST /api/large-code-plan"
     ]
   },
   "routes": [
@@ -95,7 +103,8 @@ curl http://127.0.0.1:3131/health
     "GET /api/status",
     "POST /api/generate",
     "POST /api/generate-stream",
-    "POST /api/read-file"
+    "POST /api/read-file",
+    "POST /api/large-code-plan"
   ]
 }
 ```
@@ -114,7 +123,7 @@ curl http://127.0.0.1:3131/api/status
 
 ### Response `200`
 
-O formato é semelhante ao `/health`, mas focado em métricas de fila, cache, leitura segura, logs e rate limit. A resposta também usa `ollama.configured` e `ollama.endpoint="redacted"` em vez de expor a URL real do runtime.
+O formato é semelhante ao `/health`, mas focado em métricas de fila, cache, leitura segura, logs, rate limit e geração grande. A resposta também usa `ollama.configured` e `ollama.endpoint="redacted"` em vez de expor a URL real do runtime.
 
 Clientes devem tratar novos campos como compatíveis para frente.
 
@@ -143,6 +152,8 @@ Envie `Content-Type: application/json`.
 | `language` | string | não | Foco técnico, como `Node.js`, `Flutter`, `Dart` ou `MySQL`. O servidor remove quebras de linha/caracteres de controle, compacta espaços, limita a 80 caracteres e usa `general` quando vazio. |
 | `context` | string | não | Contexto textual curto informado pelo cliente. O servidor normaliza quebras CRLF para LF, remove caracteres de controle não textuais, limita por `MAX_CONTEXT_BYTES` sem quebrar UTF-8 e ignora valores não textuais. |
 | `contextFiles` | string[] | não | Lista de caminhos relativos para arquivos textuais pequenos dentro do projeto. Uma string solta é inválida; envie sempre um array. |
+| `targetFiles` | string[] | não | Usado apenas para avaliar se a tarefa parece grande e sugerir planejamento incremental. |
+| `forceSingleGeneration` | boolean | não | Quando `true`, ignora a sugestão de planejamento grande e tenta uma geração única. Use com cuidado em PC fraco. |
 
 ### Response `200`
 
@@ -170,6 +181,33 @@ Envie `Content-Type: application/json`.
 }
 ```
 
+### Response `422` para tarefa grande
+
+Quando a tarefa parecer grande demais para uma resposta única, o backend retorna `422` sem chamar o Ollama e orienta o cliente a usar o plano incremental.
+
+```json
+{
+  "error": "Esta tarefa parece grande para uma geração única. Use /api/large-code-plan para dividir em etapas e depois gere cada etapa com /api/generate-stream.",
+  "requestId": "uuid",
+  "largeCodeSuggestion": {
+    "isLarge": true,
+    "reasons": ["large-task-keyword"],
+    "recommendedEndpoint": "POST /api/large-code-plan",
+    "suggestedRequest": {
+      "endpoint": "POST /api/large-code-plan",
+      "body": {
+        "task": "Criar CRUD completo de clientes com testes",
+        "language": "Node.js",
+        "contextFiles": ["src/server.js"],
+        "targetFiles": ["src/modules/customers/routes.js"]
+      }
+    }
+  },
+  "largeGeneration": {},
+  "rateLimit": {}
+}
+```
+
 ### Erros comuns
 
 | Status | Quando ocorre |
@@ -179,6 +217,7 @@ Envie `Content-Type: application/json`.
 | `405` | Rota conhecida chamada com método HTTP incorreto; a resposta inclui `Allow` e `allowedMethods`. |
 | `413` | Payload ou arquivo acima do limite configurado. |
 | `415` | `Content-Type` não JSON ou extensão de arquivo não permitida. |
+| `422` | Tarefa detectada como grande demais para geração única, com sugestão para `POST /api/large-code-plan`. |
 | `429` | Rate limit ou fila de geração cheia. |
 | `499` | Cliente encerrou a conexão antes do corpo completo ser lido; normalmente aparece em logs locais e pode não chegar ao cliente. |
 | `502` | Falha ao chamar o runtime local Ollama. O detalhe bruto do runtime não é exposto no contrato público. |
@@ -190,7 +229,9 @@ Gera uma resposta textual via Server-Sent Events. Recomendado para clientes que 
 
 ### Request JSON
 
-Mesmo corpo de `/api/generate`, com `Content-Type: application/json`. A normalização de `task`, `language`, `context` e `contextFiles` é a mesma do endpoint sem streaming.
+Mesmo corpo de `/api/generate`, com `Content-Type: application/json`. A normalização de `task`, `language`, `context`, `contextFiles`, `targetFiles` e `forceSingleGeneration` é a mesma do endpoint sem streaming.
+
+Quando a tarefa parecer grande e `forceSingleGeneration` não for `true`, o endpoint retorna JSON `422` antes de abrir o stream SSE.
 
 ### Eventos SSE
 
@@ -229,3 +270,122 @@ Falha durante a geração após a abertura do stream. O evento informa uma mensa
 event: error
 data: {"requestId":"uuid","error":"Falha ao chamar Ollama em streaming."}
 ```
+
+## `POST /api/large-code-plan`
+
+Cria um plano para dividir uma tarefa grande em etapas pequenas sem chamar o Ollama. Use antes de gerar CRUD completo, módulo grande, vários arquivos ou alterações com muito contexto.
+
+### Request JSON
+
+```json
+{
+  "task": "Criar CRUD completo de clientes com testes",
+  "language": "Node.js",
+  "contextFiles": ["src/server.js", "src/config.js"],
+  "targetFiles": ["src/modules/customers/routes.js", "src/modules/customers/service.js"],
+  "previousStepMemory": "Resumo opcional das etapas já concluídas.",
+  "maxFiles": 50,
+  "maxSteps": 20,
+  "maxFilesPerStep": 4
+}
+```
+
+### Campos
+
+| Campo | Tipo | Obrigatório | Observação |
+| --- | --- | --- | --- |
+| `task` | string | sim | Objetivo geral da tarefa grande. |
+| `language` | string | não | Foco técnico normalizado, como `Node.js`, `Dart`, `Flutter` ou `MySQL`. |
+| `contextFiles` | string[] | não | Lista de arquivos de contexto a distribuir em lotes pequenos. |
+| `targetFiles` | string[] | não | Lista de arquivos que devem ser gerados ou alterados em etapas separadas. |
+| `previousStepMemory` | string | não | Resumo curto de etapas anteriores para continuidade entre chamadas. |
+| `maxFiles` | number | não | Limite superior de arquivos aceitos no plano, limitado internamente pela configuração. |
+| `maxSteps` | number | não | Limite superior de etapas retornadas, limitado internamente pela configuração. |
+| `maxFilesPerStep` | number | não | Quantidade máxima de arquivos de contexto por etapa, limitada internamente pela configuração. |
+
+### Response `200`
+
+```json
+{
+  "requestId": "uuid",
+  "mode": "chunked-large-code-generation",
+  "strategy": "divide o projeto em etapas pequenas para simular contexto gigante sem estourar memória do PC fraco",
+  "language": "Node.js",
+  "task": "Criar CRUD completo de clientes com testes",
+  "limits": {
+    "maxFiles": 50,
+    "maxSteps": 20,
+    "maxFilesPerStep": 4
+  },
+  "totals": {
+    "contextFiles": 2,
+    "targetFiles": 2,
+    "contextBatches": 1,
+    "steps": 4,
+    "truncatedByStepLimit": false
+  },
+  "steps": [
+    {
+      "id": 1,
+      "type": "architecture-plan",
+      "title": "Planejar arquitetura e dividir entrega",
+      "goal": "Criar mapa dos arquivos, responsabilidades, ordem de implementação e riscos antes de gerar muito código.",
+      "language": "Node.js",
+      "contextFiles": ["src/server.js", "src/config.js"],
+      "targetFile": null,
+      "task": "Projeto grande em modo incremental..."
+    }
+  ],
+  "clientFlow": [
+    "Chame /api/large-code-plan com a tarefa grande, contextFiles e targetFiles.",
+    "Para cada item de steps, chame /api/generate-stream usando step.task, step.contextFiles e language.",
+    "Salve o resumo da resposta anterior em previousStepMemory para manter continuidade.",
+    "Gere um arquivo ou grupo pequeno por vez; não tente gerar o projeto inteiro em uma resposta."
+  ],
+  "largeGeneration": {},
+  "rateLimit": {}
+}
+```
+
+### Erros comuns
+
+| Status | Quando ocorre |
+| --- | --- |
+| `400` | `task` ausente/vazia, listas inválidas ou limites inválidos. |
+| `405` | Rota conhecida chamada com método HTTP incorreto. |
+| `413` | Payload acima do limite configurado. |
+| `415` | `Content-Type` não JSON. |
+| `429` | Rate limit local atingido. |
+
+## `POST /api/read-file`
+
+Lê arquivo textual pequeno dentro de `PROJECT_ROOT` para alimentar contexto de programação. Não executa o arquivo.
+
+### Request JSON
+
+```json
+{
+  "path": "README.md"
+}
+```
+
+### Response `200`
+
+```json
+{
+  "requestId": "uuid",
+  "path": "README.md",
+  "sizeBytes": 1000,
+  "maxFileReadBytes": 32768,
+  "content": "# TESTE Local Code LLM Backend\n...",
+  "rateLimit": {}
+}
+```
+
+### Proteções
+
+- Bloqueia caminhos absolutos e travessia para fora de `PROJECT_ROOT`.
+- Bloqueia pastas internas ou geradas como `.git`, `node_modules`, `dist`, `build`, `.next` e `.cache`.
+- Bloqueia `.env` e variantes `.env.*`.
+- Permite somente extensões configuradas em `ALLOWED_FILE_EXTENSIONS`.
+- Rejeita diretórios e arquivos acima de `MAX_FILE_READ_BYTES`.

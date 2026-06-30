@@ -17,6 +17,7 @@ A porta e host podem mudar via `HOST` e `PORT`.
 - Todas as respostas JSON usam `content-type: application/json; charset=utf-8`.
 - Respostas JSON usam `cache-control: no-store`.
 - Rotas de streaming usam Server-Sent Events com `content-type: text/event-stream; charset=utf-8`.
+- Respostas JSON e SSE incluem headers leves de segurança: `x-content-type-options: nosniff` e `referrer-policy: no-referrer`.
 - Todas as rotas `POST` aceitam apenas corpo JSON com `Content-Type: application/json` ou media type compatível `+json`.
 - Rotas conhecidas chamadas com método HTTP incorreto retornam `HTTP 405` com header `Allow` e campo `allowedMethods`.
 - Requisições `POST` encerradas pelo cliente antes do corpo completo são classificadas internamente como `499 CLIENT_CLOSED_REQUEST` para logs e tratamento previsível. Dependendo do encerramento da conexão, o cliente pode não receber corpo de resposta.

@@ -108,6 +108,7 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 - [Status do MVP backend](docs/backend-mvp-status.md)
 - [Revisão de prontidão do MVP backend](docs/mvp-readiness-review.md)
 - [Streaming SSE](docs/streaming.md)
+- [Geração grande em etapas](docs/large-code-generation.md)
 - [Rate limit local](docs/rate-limit.md)
 - [Seleção de modelos leves](docs/model-selection.md)
 - [Integração de clientes locais](docs/client-integration.md)
@@ -131,6 +132,9 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 | `MAX_FILE_READ_BYTES` | `32768` | Tamanho máximo de arquivo lido pela API |
 | `MAX_CONTEXT_FILES` | `4` | Quantidade máxima de arquivos que `/api/generate` aceita em `contextFiles` |
 | `MAX_CONTEXT_BYTES` | `12000` | Tamanho máximo do contexto final montado para o prompt |
+| `MAX_LARGE_PLAN_FILES` | `50` | Máximo de arquivos aceitos no planejamento de geração grande |
+| `MAX_LARGE_PLAN_STEPS` | `20` | Máximo de etapas retornadas em `/api/large-code-plan` |
+| `MAX_FILES_PER_CONTEXT_BATCH` | `4` | Quantidade de arquivos de contexto por etapa no planejamento grande |
 | `ALLOWED_FILE_EXTENSIONS` | lista segura | Extensões permitidas separadas por vírgula |
 | `LOG_LEVEL` | `info` | Nível dos logs estruturados: `silent`, `error`, `warn`, `info` ou `debug` |
 | `ENABLE_RATE_LIMIT` | `true` | Ativa rate limit local nas rotas pesadas |
@@ -196,6 +200,8 @@ A resposta informa:
 
 `contextFiles` reutiliza as mesmas proteções de `POST /api/read-file`: não aceita caminho absoluto, travessia, `.env`, `.git`, `node_modules`, artefatos gerados, extensões fora da allowlist ou arquivos grandes.
 
+Quando a tarefa parecer grande demais para uma resposta única, o backend retorna `422` com `largeCodeSuggestion` apontando para `POST /api/large-code-plan`. Use `forceSingleGeneration=true` somente quando quiser forçar a chamada direta ao modelo local.
+
 ### `POST /api/generate-stream`
 
 Gera resposta por streaming usando Server-Sent Events. É útil para respostas longas porque o cliente começa a receber tokens antes do término completo da geração.
@@ -208,6 +214,20 @@ Eventos emitidos:
 - `token`: pedaços de texto gerados pelo modelo.
 - `done`: finalização bem-sucedida.
 - `error`: erro durante a geração em streaming.
+
+### `POST /api/large-code-plan`
+
+Cria um plano de geração grande em etapas pequenas, sem chamar o Ollama. Use para tarefas como CRUD completo, módulo grande, vários arquivos ou contexto extenso.
+
+```bash
+curl -X POST http://127.0.0.1:3131/api/large-code-plan ^
+  -H "Content-Type: application/json" ^
+  -d "{\"task\":\"Criar CRUD completo de clientes com testes\",\"language\":\"Node.js\",\"contextFiles\":[\"src/server.js\"],\"targetFiles\":[\"src/modules/customers/routes.js\"]}"
+```
+
+A resposta traz `steps`. Cada `steps[n].task` deve ser enviado depois para `POST /api/generate-stream`, mantendo a geração incremental e adequada a PC fraco.
+
+Guia técnico completo: [`docs/large-code-generation.md`](docs/large-code-generation.md).
 
 ### `POST /api/read-file`
 

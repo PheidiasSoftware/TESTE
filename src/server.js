@@ -235,6 +235,17 @@ export function buildCodingPrompt({ task, language = 'general', context = '' }) 
   ].join('\n\n');
 }
 
+export function estimateQueueWaitMs({ queuedAt, completedAt = Date.now(), totalDurationNs = 0 } = {}) {
+  const wallMs = Number.isFinite(completedAt) && Number.isFinite(queuedAt)
+    ? Math.max(0, completedAt - queuedAt)
+    : 0;
+  const modelMs = Number.isFinite(totalDurationNs) && totalDurationNs > 0
+    ? Math.round(totalDurationNs / 1_000_000)
+    : 0;
+
+  return Math.max(0, wallMs - modelMs);
+}
+
 function callOllamaGenerate(prompt, signal) {
   return ollamaClient.generate(prompt, { signal });
 }
@@ -311,10 +322,12 @@ async function handleGenerate(request, response) {
   try {
     const queuedAt = Date.now();
     const result = await generationQueue.run(() => callOllamaGenerate(prompt, controller.signal));
+    const completedAt = Date.now();
     const cacheKey = promptCache.set(prompt, { response: result.response || '', done: Boolean(result.done) });
-    const durationMs = Date.now() - startedAt;
+    const durationMs = completedAt - startedAt;
+    const queueWaitMs = estimateQueueWaitMs({ queuedAt, completedAt, totalDurationNs: result.total_duration });
     logger.info('generate.request.completed', { requestId, durationMs, cached: false, contextFilesCount: contextBundle.files.length, contextTruncated: contextBundle.truncated, queue: getQueueStatus(), cache: getCacheStatus() });
-    sendJson(response, 200, { requestId, model: MODEL, durationMs, queueWaitMs: Date.now() - queuedAt - (result.total_duration ? Math.round(result.total_duration / 1_000_000) : 0), cached: false, cacheKey, contextFiles: contextBundle.files, contextTruncated: contextBundle.truncated, response: result.response || '', done: Boolean(result.done), queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
+    sendJson(response, 200, { requestId, model: MODEL, durationMs, queueWaitMs, cached: false, cacheKey, contextFiles: contextBundle.files, contextTruncated: contextBundle.truncated, response: result.response || '', done: Boolean(result.done), queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
   } catch (error) {
     const aborted = error?.name === 'AbortError';
     logger.error('generate.request.failed', { requestId, durationMs: Date.now() - startedAt, statusCode: aborted ? 504 : error.statusCode || 500, error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, queue: getQueueStatus(), cache: getCacheStatus() });

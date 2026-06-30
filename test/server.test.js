@@ -67,6 +67,15 @@ function assertPublicRuntimeContract(body) {
   assert.equal(typeof body.largeGeneration.maxFilesPerContextBatch, 'number');
 }
 
+function assertLargeCodeSuggestion(body) {
+  assert.match(body.error, /tarefa parece grande/i);
+  assert.equal(body.largeCodeSuggestion.recommendedEndpoint, 'POST /api/large-code-plan');
+  assert.equal(body.largeCodeSuggestion.suggestedRequest.endpoint, 'POST /api/large-code-plan');
+  assert.equal(body.largeCodeSuggestion.suggestedRequest.body.language, 'Node.js');
+  assert.ok(body.largeCodeSuggestion.reasons.includes('large-task-keyword'));
+  assert.equal(typeof body.requestId, 'string');
+}
+
 test('buildCodingPrompt inclui foco, contexto e tarefa sem depender do Ollama', () => {
   const prompt = buildCodingPrompt({
     task: 'Criar endpoint de health check',
@@ -299,12 +308,27 @@ test('POST /api/generate sugere large-code-plan para tarefa grande', async () =>
     const body = await response.json();
 
     assert.equal(response.status, 422);
-    assert.match(body.error, /tarefa parece grande/i);
-    assert.equal(body.largeCodeSuggestion.recommendedEndpoint, 'POST /api/large-code-plan');
-    assert.equal(body.largeCodeSuggestion.suggestedRequest.endpoint, 'POST /api/large-code-plan');
-    assert.equal(body.largeCodeSuggestion.suggestedRequest.body.language, 'Node.js');
-    assert.ok(body.largeCodeSuggestion.reasons.includes('large-task-keyword'));
-    assert.equal(typeof body.requestId, 'string');
+    assertLargeCodeSuggestion(body);
+  });
+});
+
+test('POST /api/generate-stream sugere large-code-plan antes de abrir SSE para tarefa grande', async () => {
+  await withTestServer(async baseUrl => {
+    const response = await fetch(`${baseUrl}/api/generate-stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        language: 'Node.js',
+        task: 'Criar CRUD completo de clientes com rotas, service, repository e testes',
+        contextFiles: ['src/server.js', 'src/config.js', 'src/http.js', 'src/logger.js'],
+        targetFiles: ['src/modules/customers/routes.js']
+      })
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 422);
+    assert.equal(response.headers.get('content-type').startsWith('application/json'), true);
+    assertLargeCodeSuggestion(body);
   });
 });
 

@@ -11,6 +11,7 @@ import {
   sendJson,
   sendServerEvent
 } from './http.js';
+import { buildLargeCodePlan } from './large-code.js';
 import { createStructuredLogger } from './logger.js';
 import { createOllamaClient } from './ollama.js';
 import {
@@ -22,6 +23,7 @@ import { createFixedWindowRateLimiter, getClientIdFromRequest } from './rate-lim
 
 export { createPromptCache } from './cache.js';
 export { createGenerationQueue } from './generation-queue.js';
+export { buildLargeCodePlan } from './large-code.js';
 export { createStructuredLogger, redactForLog } from './logger.js';
 export {
   buildContextFromFiles,
@@ -44,6 +46,9 @@ const {
   MAX_FILE_READ_BYTES,
   MAX_CONTEXT_FILES,
   MAX_CONTEXT_BYTES,
+  MAX_LARGE_PLAN_FILES,
+  MAX_LARGE_PLAN_STEPS,
+  MAX_FILES_PER_CONTEXT_BATCH,
   ALLOWED_FILE_EXTENSIONS,
   LOG_LEVEL,
   ENABLE_RATE_LIMIT,
@@ -84,12 +89,23 @@ function getFileReadStatus({ exposeProjectRoot = false } = {}) {
   return status;
 }
 
+function getLargeGenerationStatus() {
+  return {
+    mode: 'chunked-large-code-generation',
+    endpoint: 'POST /api/large-code-plan',
+    maxLargePlanFiles: MAX_LARGE_PLAN_FILES,
+    maxLargePlanSteps: MAX_LARGE_PLAN_STEPS,
+    maxFilesPerContextBatch: MAX_FILES_PER_CONTEXT_BATCH,
+    note: 'Use planejamento em etapas para simular contexto gigante sem estourar memória local.'
+  };
+}
+
 function getLogStatus() {
   return { level: LOG_LEVEL, format: 'json-lines', redaction: 'sensitive-fields' };
 }
 
 function getRateLimitStatus() {
-  return { ...rateLimiter.getStatus(), trustProxy: TRUST_PROXY, appliedToRoutes: ['POST /api/generate', 'POST /api/generate-stream', 'POST /api/read-file'] };
+  return { ...rateLimiter.getStatus(), trustProxy: TRUST_PROXY, appliedToRoutes: ['POST /api/generate', 'POST /api/generate-stream', 'POST /api/read-file', 'POST /api/large-code-plan'] };
 }
 
 function getOllamaStatus() {
@@ -105,6 +121,7 @@ function getPublicServiceStatus({ includeHealthStatus = false } = {}) {
     queue: getQueueStatus(),
     cache: getCacheStatus(),
     fileRead: getFileReadStatus(),
+    largeGeneration: getLargeGenerationStatus(),
     logging: getLogStatus(),
     rateLimit: getRateLimitStatus(),
     routes: ROUTES
@@ -141,6 +158,13 @@ function enforceRateLimit(request, response, { requestId, route }) {
     rateLimit: getRateLimitStatus()
   }, { 'retry-after': String(Math.ceil(result.retryAfterMs / 1000)) });
   return false;
+}
+
+function cappedOptionalInteger(value, fallback, maximum) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) return fallback;
+  return Math.min(maximum, parsed);
 }
 
 export function normalizeLanguageFocus(value, fallback = 'general') {
@@ -222,7 +246,7 @@ async function handleGenerate(request, response) {
   } catch (error) {
     const aborted = error?.name === 'AbortError';
     logger.error('generate.request.failed', { requestId, durationMs: Date.now() - startedAt, statusCode: aborted ? 504 : error.statusCode || 500, error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, queue: getQueueStatus(), cache: getCacheStatus() });
-    sendJson(response, aborted ? 504 : error.statusCode || 500, { error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, detail: error.detail, requestId, queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
+    sendJson(response, aborted ? 504 : error.statusCode || 500, { error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, requestId, queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
   } finally {
     clearTimeout(timeout);
   }
@@ -264,7 +288,7 @@ async function handleGenerateStream(request, response) {
   } catch (error) {
     const aborted = error?.name === 'AbortError';
     logger.error('generate_stream.request.failed', { requestId, durationMs: Date.now() - startedAt, statusCode: aborted ? 504 : error.statusCode || 500, error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, queue: getQueueStatus(), cache: getCacheStatus() });
-    sendServerEvent(response, 'error', { requestId, error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, detail: error.detail, queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
+    sendServerEvent(response, 'error', { requestId, error: aborted ? 'Tempo limite ao chamar o modelo local.' : error.message, queue: getQueueStatus(), cache: getCacheStatus(), rateLimit: getRateLimitStatus() });
   } finally {
     clearTimeout(timeout);
     response.end();
@@ -293,13 +317,42 @@ async function handleReadFile(request, response) {
   }
 }
 
-const ROUTES = ['GET /health', 'GET /api/status', 'POST /api/generate', 'POST /api/generate-stream', 'POST /api/read-file'];
+async function handleLargeCodePlan(request, response) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  logger.info('large_code_plan.request.received', { requestId, route: 'POST /api/large-code-plan', method: request.method, contentLength: request.headers['content-length'] });
+  if (!enforceJsonContentType(request, response, { requestId, route: 'POST /api/large-code-plan' })) return;
+  if (!enforceRateLimit(request, response, { requestId, route: 'POST /api/large-code-plan' })) return;
+
+  try {
+    const body = await readJsonBody(request);
+    const plan = buildLargeCodePlan({
+      task: body.task,
+      language: body.language,
+      contextFiles: body.contextFiles,
+      targetFiles: body.targetFiles,
+      previousStepMemory: body.previousStepMemory,
+      maxFiles: cappedOptionalInteger(body.maxFiles, MAX_LARGE_PLAN_FILES, MAX_LARGE_PLAN_FILES),
+      maxSteps: cappedOptionalInteger(body.maxSteps, MAX_LARGE_PLAN_STEPS, MAX_LARGE_PLAN_STEPS),
+      maxFilesPerStep: cappedOptionalInteger(body.maxFilesPerStep, MAX_FILES_PER_CONTEXT_BATCH, MAX_FILES_PER_CONTEXT_BATCH)
+    });
+
+    logger.info('large_code_plan.request.completed', { requestId, durationMs: Date.now() - startedAt, steps: plan.steps.length, contextFiles: plan.totals.contextFiles, targetFiles: plan.totals.targetFiles });
+    sendJson(response, 200, { requestId, ...plan, largeGeneration: getLargeGenerationStatus(), rateLimit: getRateLimitStatus() });
+  } catch (error) {
+    logger.warn('large_code_plan.request.failed', { requestId, durationMs: Date.now() - startedAt, statusCode: error.statusCode || 500, error: error.message });
+    sendJson(response, error.statusCode || 500, { error: error.message || 'Erro ao montar plano de geração grande.', requestId, largeGeneration: getLargeGenerationStatus(), rateLimit: getRateLimitStatus() });
+  }
+}
+
+const ROUTES = ['GET /health', 'GET /api/status', 'POST /api/generate', 'POST /api/generate-stream', 'POST /api/read-file', 'POST /api/large-code-plan'];
 const ROUTE_METHODS = new Map([
   ['/health', ['GET']],
   ['/api/status', ['GET']],
   ['/api/generate', ['POST']],
   ['/api/generate-stream', ['POST']],
-  ['/api/read-file', ['POST']]
+  ['/api/read-file', ['POST']],
+  ['/api/large-code-plan', ['POST']]
 ]);
 
 function sendMethodNotAllowed(response, allowedMethods) {
@@ -333,6 +386,10 @@ export const server = createServer(async (request, response) => {
       await handleReadFile(request, response);
       return;
     }
+    if (request.method === 'POST' && url.pathname === '/api/large-code-plan') {
+      await handleLargeCodePlan(request, response);
+      return;
+    }
     const allowedMethods = ROUTE_METHODS.get(url.pathname);
     if (allowedMethods) {
       sendMethodNotAllowed(response, allowedMethods);
@@ -353,6 +410,7 @@ export function getStartupConsoleLines() {
     `Cache: ${ENABLE_PROMPT_CACHE ? 'ativo' : 'desativado'}, limite=${MAX_CACHE_ENTRIES}`,
     `Leitura de arquivos: raiz=redacted, limite=${MAX_FILE_READ_BYTES} bytes`,
     `Contexto por arquivos: máximo=${MAX_CONTEXT_FILES} arquivos, limite=${MAX_CONTEXT_BYTES} bytes`,
+    `Geração grande: plano em até ${MAX_LARGE_PLAN_STEPS} etapas, ${MAX_LARGE_PLAN_FILES} arquivos e lotes de ${MAX_FILES_PER_CONTEXT_BATCH}`,
     `Logs estruturados: nível=${LOG_LEVEL}, formato=json-lines`,
     `Rate limit: ${ENABLE_RATE_LIMIT ? 'ativo' : 'desativado'}, limite=${RATE_LIMIT_MAX_REQUESTS}/${RATE_LIMIT_WINDOW_MS}ms`,
     'Streaming: POST /api/generate-stream com Server-Sent Events'
@@ -361,7 +419,7 @@ export function getStartupConsoleLines() {
 
 function startServer() {
   server.listen(PORT, HOST, () => {
-    logger.info('server.started', { host: HOST, port: PORT, model: MODEL, ollamaUrl: OLLAMA_URL, generationConcurrency: GENERATION_CONCURRENCY, maxQueueSize: MAX_QUEUE_SIZE, promptCacheEnabled: ENABLE_PROMPT_CACHE, maxCacheEntries: MAX_CACHE_ENTRIES, projectRoot: PROJECT_ROOT, maxFileReadBytes: MAX_FILE_READ_BYTES, maxContextFiles: MAX_CONTEXT_FILES, maxContextBytes: MAX_CONTEXT_BYTES, logLevel: LOG_LEVEL, rateLimit: getRateLimitStatus() });
+    logger.info('server.started', { host: HOST, port: PORT, model: MODEL, ollamaUrl: OLLAMA_URL, generationConcurrency: GENERATION_CONCURRENCY, maxQueueSize: MAX_QUEUE_SIZE, promptCacheEnabled: ENABLE_PROMPT_CACHE, maxCacheEntries: MAX_CACHE_ENTRIES, projectRoot: PROJECT_ROOT, maxFileReadBytes: MAX_FILE_READ_BYTES, maxContextFiles: MAX_CONTEXT_FILES, maxContextBytes: MAX_CONTEXT_BYTES, largeGeneration: getLargeGenerationStatus(), logLevel: LOG_LEVEL, rateLimit: getRateLimitStatus() });
     getStartupConsoleLines().forEach(line => console.log(line));
   });
 }

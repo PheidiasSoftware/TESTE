@@ -44,7 +44,8 @@ O teste usa o runner nativo do Node.js e cobre:
 - helpers HTTP;
 - logs estruturados;
 - rate limit local;
-- rotas locais que não chamam o Ollama.
+- rotas locais que não chamam o Ollama;
+- detecção de geração grande e planejamento incremental sem chamar o Ollama.
 
 ## Subir o backend com padrões conservadores
 
@@ -92,10 +93,10 @@ Invoke-RestMethod http://127.0.0.1:3131/api/status
 Resultado esperado:
 
 - modelo configurado;
-- URL do Ollama configurada;
+- status sanitizado do Ollama, sem expor a URL real;
 - status da fila;
 - status do cache;
-- configuração de leitura segura;
+- configuração de leitura segura, sem expor a raiz absoluta do projeto;
 - configuração do rate limit.
 
 ## Testar validação de entrada sem chamar modelo
@@ -111,6 +112,41 @@ Invoke-RestMethod `
 Resultado esperado: erro HTTP 400 informando que `task` precisa ser texto.
 
 Esse teste confirma a validação antes de qualquer chamada ao runtime local.
+
+## Testar detecção de tarefa grande sem chamar modelo
+
+Esse teste confirma que o backend protege PC fraco contra uma geração única grande demais e orienta o cliente a usar o planejamento incremental.
+
+```powershell
+try {
+  Invoke-RestMethod `
+    -Method Post `
+    -Uri http://127.0.0.1:3131/api/generate `
+    -ContentType 'application/json' `
+    -Body '{"task":"Criar CRUD completo de clientes com rotas, service, repository e testes","language":"Node.js","contextFiles":["src/server.js","src/config.js","src/http.js","src/logger.js"],"targetFiles":["src/modules/customers/routes.js"]}'
+} catch {
+  $_.Exception.Response.StatusCode.value__
+}
+```
+
+Resultado esperado: HTTP 422 com `largeCodeSuggestion.recommendedEndpoint` apontando para `POST /api/large-code-plan`.
+
+Para validar o plano sem chamar Ollama:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:3131/api/large-code-plan `
+  -ContentType 'application/json' `
+  -Body '{"task":"Criar CRUD completo de clientes com testes","language":"Node.js","contextFiles":["src/server.js"],"targetFiles":["src/modules/customers/routes.js"]}'
+```
+
+Resultado esperado:
+
+- `mode` igual a `chunked-large-code-generation`;
+- lista `steps` com etapas pequenas;
+- primeira etapa do tipo `architecture-plan`;
+- etapa final do tipo `integration-review`.
 
 ## Testar leitura segura de arquivo
 
@@ -202,6 +238,8 @@ Antes de modularizar mais o `src/server.js`, confirme:
 - `GET /health` responde;
 - `GET /api/status` responde;
 - payload inválido em `/api/generate` retorna 400;
+- tarefa grande em `/api/generate` retorna 422 com sugestão de `/api/large-code-plan`;
+- `/api/large-code-plan` retorna plano incremental sem chamar Ollama;
 - caminho inseguro em `/api/read-file` retorna 403;
 - se Ollama estiver instalado, `/api/generate` responde com modelo pequeno.
 

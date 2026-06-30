@@ -22,7 +22,7 @@ test('POST /api/generate rejeita task vazia ou somente espaços antes de chamar 
     const response = await fetch(`${baseUrl}/api/generate`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ task: '   \n\t  ', language: 'Node.js' })
+      body: JSON.stringify({ task: String.fromCharCode(32, 32, 32, 10, 9, 32, 32), language: 'Node.js' })
     });
     const body = await response.json();
 

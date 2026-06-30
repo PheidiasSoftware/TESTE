@@ -140,7 +140,7 @@ Envie `Content-Type: application/json`.
 | --- | --- | --- | --- |
 | `task` | string | sim | Tarefa de programação. O servidor exige texto não vazio após `trim()` e limita tamanho antes de montar o prompt. |
 | `language` | string | não | Foco técnico, como `Node.js`, `Flutter`, `Dart` ou `MySQL`. O servidor remove quebras de linha/caracteres de controle, compacta espaços, limita a 80 caracteres e usa `general` quando vazio. |
-| `context` | string | não | Contexto textual curto informado pelo cliente. |
+| `context` | string | não | Contexto textual curto informado pelo cliente. O servidor normaliza quebras CRLF para LF, remove caracteres de controle não textuais, limita por `MAX_CONTEXT_BYTES` sem quebrar UTF-8 e ignora valores não textuais. |
 | `contextFiles` | string[] | não | Lista de caminhos relativos para arquivos textuais pequenos dentro do projeto. Uma string solta é inválida; envie sempre um array. |
 
 ### Response `200`

@@ -37,9 +37,11 @@ Motivo: uma tarefa vazia não deve ocupar fila, cache ou runtime local em máqui
 
 Comportamento:
 
-- string com texto: o valor é normalizado com `trim()` e limitado antes de entrar no prompt;
+- string com texto: remove caracteres de controle, compacta espaços, aplica `trim()` e limita a 80 caracteres antes de entrar no prompt;
 - string vazia ou somente espaços: usa `general`;
 - tipo não textual: usa `general`.
+
+Motivo: `language` é metadado curto do prompt, não um campo livre de contexto. A normalização evita quebrar a linha `Linguagem/foco:` com quebras de linha, tabulações ou caracteres de controle.
 
 ## Segurança e performance
 
@@ -49,6 +51,9 @@ Esta validação é executada antes da chamada ao modelo local. Ela não executa
 
 Cobertura adicionada em `test/generate-validation.test.js`:
 
+- `normalizeLanguageFocus()` remove quebras de linha, tabulações e aplica fallback `general`;
+- `normalizeLanguageFocus()` limita o foco técnico a 80 caracteres;
+- `buildCodingPrompt()` recebe o foco técnico normalizado em uma única linha de metadados;
 - `/api/generate` rejeita `task` só com espaços, quebra de linha e tabulação;
 - `/api/generate-stream` rejeita `task` vazia antes de abrir SSE.
 

@@ -138,7 +138,7 @@ Envie `Content-Type: application/json`.
 | `task` | string | sim | Tarefa de programação. O servidor limita tamanho antes de montar o prompt. |
 | `language` | string | não | Foco técnico, como `Node.js`, `Flutter`, `Dart` ou `MySQL`. |
 | `context` | string | não | Contexto textual curto informado pelo cliente. |
-| `contextFiles` | string[] | não | Caminhos relativos para arquivos textuais pequenos dentro do projeto. |
+| `contextFiles` | string[] | não | Lista de caminhos relativos para arquivos textuais pequenos dentro do projeto. Uma string solta é inválida; envie sempre um array. |
 
 ### Response `200`
 
@@ -170,7 +170,7 @@ Envie `Content-Type: application/json`.
 
 | Status | Quando ocorre |
 | --- | --- |
-| `400` | JSON inválido, `task` ausente, `contextFiles` inválido ou caminho malformado. |
+| `400` | JSON inválido, `task` ausente, `contextFiles` não-array, item de `contextFiles` não-textual ou caminho malformado. |
 | `403` | Tentativa de ler caminho fora do projeto ou pasta bloqueada. |
 | `413` | Payload ou arquivo acima do limite configurado. |
 | `415` | `Content-Type` não JSON ou extensão de arquivo não permitida. |

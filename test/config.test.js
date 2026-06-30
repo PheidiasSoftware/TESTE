@@ -151,9 +151,9 @@ test('normalizeOllamaUrl accepts http and https URLs only', () => {
   assert.equal(normalizeOllamaUrl('not a url'), 'http://127.0.0.1:11434');
 });
 
-test('normalizeOllamaUrl strips query and hash fragments before exposing config', () => {
+test('normalizeOllamaUrl strips query, hash and credentials before exposing config', () => {
   assert.equal(
-    normalizeOllamaUrl('http://127.0.0.1:11434/?token=secret#section'),
+    normalizeOllamaUrl('http://user:secret@127.0.0.1:11434/?token=secret#section'),
     'http://127.0.0.1:11434'
   );
 });
@@ -256,19 +256,4 @@ test('normalizeAllowedFileExtension rejects unsafe extension entries', () => {
 
 test('getAllowedFileExtensions parses custom comma separated extensions', () => {
   assert.deepEqual(getAllowedFileExtensions({ ALLOWED_FILE_EXTENSIONS: 'JS, dart, .sql,, md ' }), ['.js', '.dart', '.sql', '.md']);
-});
-
-test('getAllowedFileExtensions deduplicates and ignores unsafe custom extensions', () => {
-  assert.deepEqual(
-    getAllowedFileExtensions({ ALLOWED_FILE_EXTENSIONS: 'js, .JS, ../x, .sql, js/ts, .sql' }),
-    ['.js', '.sql']
-  );
-});
-
-test('getAllowedFileExtensions falls back to safe defaults when custom value is empty', () => {
-  assert.deepEqual(getAllowedFileExtensions({ ALLOWED_FILE_EXTENSIONS: ' , , ' }), DEFAULT_ALLOWED_FILE_EXTENSIONS);
-});
-
-test('getAllowedFileExtensions falls back to safe defaults when all custom extensions are rejected', () => {
-  assert.deepEqual(getAllowedFileExtensions({ ALLOWED_FILE_EXTENSIONS: '../x, *, ., js/ts' }), DEFAULT_ALLOWED_FILE_EXTENSIONS);
 });

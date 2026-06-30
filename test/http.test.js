@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   openEventStream,
   readJsonBody,
+  SECURITY_HEADERS,
   sendJson,
   sendServerEvent
 } from '../src/http.js';
@@ -53,7 +54,14 @@ function createAbortedMockRequest() {
   return request;
 }
 
-test('sendJson responde JSON sem cache persistente', () => {
+test('SECURITY_HEADERS define proteções HTTP leves e estáveis', () => {
+  assert.deepEqual(SECURITY_HEADERS, {
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer'
+  });
+});
+
+test('sendJson responde JSON sem cache persistente e com headers de segurança', () => {
   const response = createMockResponse();
 
   sendJson(response, 201, { ok: true }, { 'x-test': '1' });
@@ -61,6 +69,8 @@ test('sendJson responde JSON sem cache persistente', () => {
   assert.equal(response.statusCode, 201);
   assert.equal(response.headers['content-type'], 'application/json; charset=utf-8');
   assert.equal(response.headers['cache-control'], 'no-store');
+  assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers['referrer-policy'], 'no-referrer');
   assert.equal(response.headers['x-test'], '1');
   assert.equal(response.ended, true);
   assert.deepEqual(JSON.parse(response.chunks.join('')), { ok: true });
@@ -74,7 +84,7 @@ test('sendServerEvent formata evento SSE em uma única mensagem', () => {
   assert.equal(response.chunks.join(''), 'event: token\ndata: {"token":"abc"}\n\n');
 });
 
-test('openEventStream configura cabeçalhos de streaming leve', () => {
+test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {
   const response = createMockResponse();
 
   openEventStream(response);
@@ -82,6 +92,8 @@ test('openEventStream configura cabeçalhos de streaming leve', () => {
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers['content-type'], 'text/event-stream; charset=utf-8');
   assert.equal(response.headers['cache-control'], 'no-store, no-transform');
+  assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers['referrer-policy'], 'no-referrer');
   assert.equal(response.headers.connection, 'keep-alive');
 });
 

@@ -112,7 +112,7 @@ export async function buildContextFromFiles({
   maxFileReadBytes,
   allowedFileExtensions = []
 } = {}) {
-  if (contextFiles === undefined || contextFiles === null || contextFiles.length === 0) {
+  if (contextFiles === undefined || contextFiles === null) {
     const safeContext = typeof context === 'string' ? truncateUtf8ToBytes(context, maxContextBytes) : '';
     return {
       context: safeContext,
@@ -124,6 +124,16 @@ export async function buildContextFromFiles({
 
   if (!Array.isArray(contextFiles)) {
     throw Object.assign(new Error('contextFiles precisa ser uma lista de caminhos relativos.'), { statusCode: 400 });
+  }
+
+  if (contextFiles.length === 0) {
+    const safeContext = typeof context === 'string' ? truncateUtf8ToBytes(context, maxContextBytes) : '';
+    return {
+      context: safeContext,
+      files: [],
+      totalBytes: Buffer.byteLength(safeContext, 'utf8'),
+      truncated: Buffer.byteLength(String(context || ''), 'utf8') > Buffer.byteLength(safeContext, 'utf8')
+    };
   }
 
   if (contextFiles.length > maxFiles) {

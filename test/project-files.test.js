@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   buildContextFromFiles,
+  normalizeManualContext,
   readProjectFile,
   truncateUtf8ToBytes,
   validateSafeProjectFilePath
@@ -83,6 +84,17 @@ test('truncateUtf8ToBytes não divide caracteres multibyte', () => {
   assert.equal(truncateUtf8ToBytes('😀teste', 3), '');
   assert.equal(truncateUtf8ToBytes('😀teste', 4), '😀');
   assert.equal(truncateUtf8ToBytes('ok', 10), 'ok');
+});
+
+test('normalizeManualContext remove controles não textuais e preserva quebras úteis', () => {
+  const normalized = normalizeManualContext('linha 1\r\nlinha\u0000 2\u0007\nlinha 3', 1024);
+
+  assert.equal(normalized, 'linha 1\nlinha  2 \nlinha 3');
+});
+
+test('normalizeManualContext limita contexto manual sem quebrar UTF-8', () => {
+  assert.equal(normalizeManualContext('😀teste', 5), '😀t');
+  assert.equal(normalizeManualContext({ texto: 'ignorar' }, 100), '');
 });
 
 test('buildContextFromFiles monta contexto controlado com arquivos textuais pequenos', async () => {

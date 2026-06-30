@@ -54,6 +54,10 @@ function assertPublicRuntimeContract(body) {
     'POST /api/generate-stream',
     'POST /api/read-file'
   ]);
+  assert.equal(typeof body.ollama.configured, 'boolean');
+  assert.equal(body.ollama.endpoint, 'redacted');
+  assert.equal(Object.hasOwn(body, 'ollamaUrl'), false);
+  assert.equal(Object.hasOwn(body.fileRead, 'projectRoot'), false);
 }
 
 test('buildCodingPrompt inclui foco, contexto e tarefa sem depender do Ollama', () => {
@@ -194,7 +198,7 @@ test('readProjectFile lê arquivo pequeno e bloqueia arquivo acima do limite', a
   }
 });
 
-test('GET /health responde estado local sem chamar Ollama', async () => {
+test('GET /health responde estado local sanitizado sem chamar Ollama', async () => {
   await withTestServer(async baseUrl => {
     const response = await fetch(`${baseUrl}/health`);
     const body = await response.json();
@@ -211,7 +215,7 @@ test('GET /health responde estado local sem chamar Ollama', async () => {
   });
 });
 
-test('GET /api/status responde métricas da fila sem chamar Ollama', async () => {
+test('GET /api/status responde métricas sanitizadas da fila sem chamar Ollama', async () => {
   await withTestServer(async baseUrl => {
     const response = await fetch(`${baseUrl}/api/status`);
     const body = await response.json();

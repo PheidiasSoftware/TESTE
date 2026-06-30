@@ -42,6 +42,17 @@ function createMockRequest(chunks = []) {
   return request;
 }
 
+function createAbortedMockRequest() {
+  const request = new EventEmitter();
+  request.destroy = () => {};
+  process.nextTick(() => {
+    request.emit('data', Buffer.from('{"a"'));
+    request.emit('aborted');
+    request.emit('close');
+  });
+  return request;
+}
+
 test('sendJson responde JSON sem cache persistente', () => {
   const response = createMockResponse();
 
@@ -101,5 +112,12 @@ test('readJsonBody retorna erro 400 para JSON inválido', async () => {
   await assert.rejects(
     () => readJsonBody(createMockRequest(['{invalido'])),
     error => error.statusCode === 400
+  );
+});
+
+test('readJsonBody retorna 499 quando cliente encerra antes do corpo completo', async () => {
+  await assert.rejects(
+    () => readJsonBody(createAbortedMockRequest()),
+    error => error.statusCode === 499 && error.code === 'CLIENT_CLOSED_REQUEST'
   );
 });

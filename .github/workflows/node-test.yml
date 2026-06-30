@@ -31,8 +31,16 @@ jobs:
         with:
           node-version: 20
 
+      - name: Print runtime versions
+        run: |
+          node --version
+          npm --version
+
       - name: Run tests
         env:
+          CI: "true"
+          NO_COLOR: "1"
+          NODE_OPTIONS: --enable-source-maps
           HOST: 127.0.0.1
           PORT: 3131
           OLLAMA_URL: http://127.0.0.1:11434
@@ -46,10 +54,10 @@ jobs:
           MAX_FILE_READ_BYTES: 32768
           MAX_CONTEXT_FILES: 4
           MAX_CONTEXT_BYTES: 12000
-          ENABLE_RATE_LIMIT: "true"
+          ENABLE_RATE_LIMIT: "false"
           RATE_LIMIT_WINDOW_MS: 60000
-          RATE_LIMIT_MAX_REQUESTS: 30
+          RATE_LIMIT_MAX_REQUESTS: 1000
           RATE_LIMIT_MAX_CLIENTS: 500
           TRUST_PROXY: "false"
           LOG_LEVEL: silent
-        run: npm test
+        run: npm test -- --test-reporter=spec

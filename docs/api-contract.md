@@ -17,6 +17,7 @@ A porta e host podem mudar via `HOST` e `PORT`.
 - Todas as respostas JSON usam `content-type: application/json; charset=utf-8`.
 - Respostas JSON usam `cache-control: no-store`.
 - Rotas de streaming usam Server-Sent Events com `content-type: text/event-stream; charset=utf-8`.
+- Todas as rotas `POST` aceitam apenas corpo JSON com `Content-Type: application/json` ou media type compatível `+json`.
 - Rotas pesadas podem retornar `HTTP 429` quando o rate limit local é atingido.
 - Erros retornam pelo menos o campo `error`.
 - Quando disponível, respostas incluem `requestId` para correlação com logs locais.
@@ -119,6 +120,8 @@ Gera uma resposta textual de programação usando o modelo local via Ollama.
 
 ### Request JSON
 
+Envie `Content-Type: application/json`.
+
 ```json
 {
   "task": "Crie uma função JS para validar email sem dependências externas.",
@@ -170,7 +173,7 @@ Gera uma resposta textual de programação usando o modelo local via Ollama.
 | `400` | JSON inválido, `task` ausente, `contextFiles` inválido ou caminho malformado. |
 | `403` | Tentativa de ler caminho fora do projeto ou pasta bloqueada. |
 | `413` | Payload ou arquivo acima do limite configurado. |
-| `415` | Extensão de arquivo não permitida. |
+| `415` | `Content-Type` não JSON ou extensão de arquivo não permitida. |
 | `429` | Rate limit ou fila de geração cheia. |
 | `502` | Falha ao chamar o runtime local Ollama. |
 | `504` | Timeout chamando o modelo local. |
@@ -181,7 +184,7 @@ Gera uma resposta textual via Server-Sent Events. Recomendado para clientes que 
 
 ### Request JSON
 
-Mesmo corpo de `/api/generate`.
+Mesmo corpo de `/api/generate`, com `Content-Type: application/json`.
 
 ### Eventos SSE
 
@@ -229,6 +232,8 @@ Lê um arquivo textual pequeno dentro da raiz do projeto para uso como contexto.
 
 ### Request JSON
 
+Envie `Content-Type: application/json`.
+
 ```json
 {
   "path": "src/server.js"
@@ -256,6 +261,7 @@ Lê um arquivo textual pequeno dentro da raiz do projeto para uso como contexto.
 - Bloqueia `.env` e `.env.*`.
 - Aceita apenas extensões textuais permitidas.
 - Bloqueia arquivos acima de `MAX_FILE_READ_BYTES`.
+- Rejeita requisições sem `Content-Type` JSON antes de ler o corpo.
 
 ## Exemplo mínimo em Node.js
 
@@ -264,27 +270,20 @@ const response = await fetch('http://127.0.0.1:3131/api/generate', {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({
-    task: 'Explique como melhorar este endpoint.',
-    language: 'Node.js',
-    contextFiles: ['src/server.js']
+    task: 'Explique este erro do Node.js e sugira correção simples.',
+    language: 'Node.js'
   })
 });
 
-const data = await response.json();
-
-if (!response.ok) {
-  throw new Error(data.error || 'Falha na API local');
-}
-
-console.log(data.response);
+console.log(await response.json());
 ```
 
-## Compatibilidade para clientes
+## Compatibilidade com cliente local
 
-Clientes locais devem:
+Clientes simples em Node.js, Flutter Desktop ou scripts PowerShell devem:
 
-- preferir `POST /api/generate-stream` para respostas longas;
-- manter timeouts próprios maiores que o tempo esperado em CPU fraca;
-- tratar `429` com espera usando `Retry-After` quando existir;
-- ler `ollama.configured` para saber se há runtime configurado, sem depender de URL real exposta;
-- tratar campos novos como compatíveis para frente.
+1. consultar `/api/status` para exibir configuração básica;
+2. enviar tarefas curtas para `/api/generate`;
+3. usar `/api/generate-stream` quando quiserem resposta progressiva;
+4. usar `/api/read-file` somente com caminhos relativos selecionados pelo usuário;
+5. tratar `429`, `502` e `504` com mensagens claras e opção de tentar novamente.

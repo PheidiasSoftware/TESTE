@@ -60,6 +60,9 @@ if (-not $env:MAX_CACHE_ENTRIES) { $env:MAX_CACHE_ENTRIES = "20" }
 if (-not $env:MAX_CONTEXT_FILES) { $env:MAX_CONTEXT_FILES = "4" }
 if (-not $env:MAX_CONTEXT_BYTES) { $env:MAX_CONTEXT_BYTES = "12000" }
 if (-not $env:MAX_FILE_READ_BYTES) { $env:MAX_FILE_READ_BYTES = "32768" }
+if (-not $env:MAX_LARGE_PLAN_FILES) { $env:MAX_LARGE_PLAN_FILES = "50" }
+if (-not $env:MAX_LARGE_PLAN_STEPS) { $env:MAX_LARGE_PLAN_STEPS = "20" }
+if (-not $env:MAX_FILES_PER_CONTEXT_BATCH) { $env:MAX_FILES_PER_CONTEXT_BATCH = "4" }
 if (-not $env:ENABLE_RATE_LIMIT) { $env:ENABLE_RATE_LIMIT = "true" }
 if (-not $env:RATE_LIMIT_WINDOW_MS) { $env:RATE_LIMIT_WINDOW_MS = "60000" }
 if (-not $env:RATE_LIMIT_MAX_REQUESTS) { $env:RATE_LIMIT_MAX_REQUESTS = "30" }
@@ -79,6 +82,7 @@ Write-Host "Generation concurrency: $env:GENERATION_CONCURRENCY"
 Write-Host "Max queue size: $env:MAX_QUEUE_SIZE"
 Write-Host "Max context files: $env:MAX_CONTEXT_FILES"
 Write-Host "Max context bytes: $env:MAX_CONTEXT_BYTES"
+Write-Host "Large generation plan: max files $env:MAX_LARGE_PLAN_FILES / max steps $env:MAX_LARGE_PLAN_STEPS / batch size $env:MAX_FILES_PER_CONTEXT_BATCH"
 Write-Host "Log level: $env:LOG_LEVEL"
 Write-Host ""
 

@@ -111,6 +111,23 @@ function getPublicServiceStatus({ includeHealthStatus = false } = {}) {
   };
 }
 
+function isJsonContentType(contentType) {
+  const mediaType = String(contentType || '').split(';', 1)[0].trim().toLowerCase();
+  return mediaType === 'application/json' || mediaType.endsWith('+json');
+}
+
+function enforceJsonContentType(request, response, { requestId, route }) {
+  if (isJsonContentType(request.headers['content-type'])) return true;
+
+  logger.warn('http.content_type.unsupported', { requestId, route, contentType: request.headers['content-type'] || null });
+  sendJson(response, 415, {
+    error: 'Content-Type precisa ser application/json.',
+    requestId,
+    expectedContentType: 'application/json'
+  });
+  return false;
+}
+
 function enforceRateLimit(request, response, { requestId, route }) {
   const clientId = getClientIdFromRequest(request, { trustProxy: TRUST_PROXY });
   const result = rateLimiter.check(clientId);
@@ -166,6 +183,7 @@ async function handleGenerate(request, response) {
   const requestId = randomUUID();
   const startedAt = Date.now();
   logger.info('generate.request.received', { requestId, route: 'POST /api/generate', method: request.method, contentLength: request.headers['content-length'] });
+  if (!enforceJsonContentType(request, response, { requestId, route: 'POST /api/generate' })) return;
   if (!enforceRateLimit(request, response, { requestId, route: 'POST /api/generate' })) return;
   let payload;
   try {
@@ -204,6 +222,7 @@ async function handleGenerateStream(request, response) {
   const requestId = randomUUID();
   const startedAt = Date.now();
   logger.info('generate_stream.request.received', { requestId, route: 'POST /api/generate-stream', method: request.method, contentLength: request.headers['content-length'] });
+  if (!enforceJsonContentType(request, response, { requestId, route: 'POST /api/generate-stream' })) return;
   if (!enforceRateLimit(request, response, { requestId, route: 'POST /api/generate-stream' })) return;
   let payload;
   try {
@@ -246,6 +265,7 @@ async function handleReadFile(request, response) {
   const requestId = randomUUID();
   const startedAt = Date.now();
   logger.info('read_file.request.received', { requestId, route: 'POST /api/read-file', method: request.method, contentLength: request.headers['content-length'] });
+  if (!enforceJsonContentType(request, response, { requestId, route: 'POST /api/read-file' })) return;
   if (!enforceRateLimit(request, response, { requestId, route: 'POST /api/read-file' })) return;
   try {
     const body = await readJsonBody(request);

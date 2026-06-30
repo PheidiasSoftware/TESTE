@@ -6,7 +6,8 @@ import {
   createOllamaClient,
   parseOllamaStreamLine,
   readOllamaStream,
-  sanitizeOllamaOptions
+  sanitizeOllamaOptions,
+  sanitizeUpstreamErrorDetail
 } from '../src/ollama.js';
 
 test('buildOllamaGeneratePayload builds conservative payload', () => {
@@ -38,6 +39,20 @@ test('sanitizeOllamaOptions clamps values', () => {
     sanitizeOllamaOptions({ num_ctx: 1, num_predict: 1, temperature: -1 }),
     { num_ctx: 512, num_predict: 64, temperature: 0 }
   );
+});
+
+test('sanitizeUpstreamErrorDetail removes control characters and caps detail size', () => {
+  const detail = sanitizeUpstreamErrorDetail(' erro\n\tcom\r\ncontrole '.padEnd(400, 'x'));
+
+  assert.equal(detail.length, 300);
+  assert.ok(detail.startsWith('erro com controle'));
+  assert.equal(detail.includes('\n'), false);
+  assert.equal(detail.includes('\t'), false);
+});
+
+test('sanitizeUpstreamErrorDetail omits empty or non-text detail', () => {
+  assert.equal(sanitizeUpstreamErrorDetail('   '), undefined);
+  assert.equal(sanitizeUpstreamErrorDetail(null), undefined);
 });
 
 test('buildOllamaGeneratePayload rejects missing model or prompt', () => {
@@ -99,13 +114,16 @@ test('createOllamaClient maps Ollama failures to safe backend error', async () =
     model: 'qwen',
     fetchImpl: async () => ({
       ok: false,
-      text: async () => 'modelo não encontrado'
+      text: async () => 'modelo\n\tnão encontrado'.padEnd(400, 'x')
     })
   });
 
   await assert.rejects(
     () => client.generate('teste'),
-    error => error.statusCode === 502 && error.detail.includes('modelo')
+    error => error.statusCode === 502
+      && error.detail.includes('modelo não encontrado')
+      && error.detail.length === 300
+      && !error.detail.includes('\n')
   );
 });
 

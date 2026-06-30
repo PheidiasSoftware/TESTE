@@ -37,7 +37,7 @@ export const RUNTIME_NUMERIC_LIMITS = {
   RATE_LIMIT_MAX_CLIENTS: { fallback: 500, minimum: 1, maximum: 2000 }
 };
 
-export const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content)/i;
+export const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|senha|cookie|set-cookie|prompt|context|response|content|ollama[_-]?url|base[_-]?url|project[_-]?root)/i;
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_MODEL = 'qwen2.5-coder:1.5b-instruct';

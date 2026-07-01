@@ -33,8 +33,9 @@ function createMockResponse() {
   };
 }
 
-function createMockRequest(chunks = []) {
+function createMockRequest(chunks = [], { headers = {} } = {}) {
   const request = new EventEmitter();
+  request.headers = headers;
   request.destroyedByHelper = false;
   request.destroy = () => {
     request.destroyedByHelper = true;
@@ -48,6 +49,7 @@ function createMockRequest(chunks = []) {
 
 function createAbortedMockRequest() {
   const request = new EventEmitter();
+  request.headers = {};
   request.destroy = () => {};
   process.nextTick(() => {
     request.emit('data', Buffer.from('{"a"'));
@@ -221,6 +223,24 @@ test('readJsonBody lê JSON, aceita corpo vazio e bloqueia payload grande', asyn
     error => error.statusCode === 413
   );
   assert.equal(oversizedRequest.destroyedByHelper, true);
+});
+
+test('readJsonBody rejeita payload grande pelo Content-Length antes de acumular corpo', async () => {
+  const oversizedRequest = createMockRequest(['{}'], { headers: { 'content-length': '9999' } });
+
+  await assert.rejects(
+    () => readJsonBody(oversizedRequest, { maxBodyBytes: 4 }),
+    error => error.statusCode === 413
+  );
+
+  assert.equal(oversizedRequest.destroyedByHelper, true);
+});
+
+test('readJsonBody ignora Content-Length inválido e valida pelo corpo real', async () => {
+  const request = createMockRequest(['{"a":1}'], { headers: { 'content-length': '9999x' } });
+
+  assert.deepEqual(await readJsonBody(request, { maxBodyBytes: 8 }), { a: 1 });
+  assert.equal(request.destroyedByHelper, false);
 });
 
 test('readJsonBody permite não destruir stream ao exceder limite quando configurado', async () => {

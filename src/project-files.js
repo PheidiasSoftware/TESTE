@@ -1,6 +1,8 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
 
+export const MAX_CONTEXT_FILE_PATH_CHARS = 500;
+
 function isPathInsideRoot(root, target) {
   const relativePath = relative(root, target);
   return Boolean(relativePath) && !relativePath.startsWith('..') && !isAbsolute(relativePath);
@@ -188,8 +190,12 @@ export async function buildContextFromFiles({
       throw Object.assign(new Error('Todos os itens de contextFiles precisam ser texto.'), { statusCode: 400 });
     }
 
+    if (item.length > MAX_CONTEXT_FILE_PATH_CHARS) {
+      throw Object.assign(new Error(`Cada caminho em contextFiles aceita no máximo ${MAX_CONTEXT_FILE_PATH_CHARS} caracteres.`), { statusCode: 400 });
+    }
+
     const file = await readProjectFile({
-      path: item.slice(0, 500),
+      path: item,
       projectRoot,
       maxBytes: Math.min(maxFileReadBytes, maxContextBytes),
       allowedFileExtensions

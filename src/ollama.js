@@ -4,6 +4,10 @@ const DEFAULT_OLLAMA_OPTIONS = Object.freeze({
   temperature: 0.2
 });
 
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 export function buildOllamaGeneratePayload({
   model,
   prompt,
@@ -67,6 +71,18 @@ export function createSafeUpstreamError(message, { statusCode = 502, detail } = 
   });
 }
 
+export function normalizeOllamaGenerateResult(value) {
+  if (!isPlainObject(value) || typeof value.response !== 'string') {
+    throw createSafeUpstreamError('Resposta inválida do Ollama.');
+  }
+
+  return {
+    response: value.response,
+    done: Boolean(value.done),
+    total_duration: Number.isFinite(value.total_duration) ? value.total_duration : undefined
+  };
+}
+
 export function parseOllamaStreamLine(line) {
   const trimmed = typeof line === 'string' ? line.trim() : '';
   if (!trimmed) return null;
@@ -123,7 +139,7 @@ export function createOllamaClient({
     }
 
     try {
-      return await response.json();
+      return normalizeOllamaGenerateResult(await response.json());
     } catch {
       throw createSafeUpstreamError('Resposta inválida do Ollama.');
     }

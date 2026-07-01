@@ -7,6 +7,15 @@ function normalizePositiveInteger(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+export function normalizeClientId(value, fallback = 'local') {
+  const normalized = String(value || '')
+    .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return normalized ? normalized.slice(0, 120) : fallback;
+}
+
 export function createFixedWindowRateLimiter({
   enabled = true,
   windowMs = DEFAULT_WINDOW_MS,
@@ -68,7 +77,7 @@ export function createFixedWindowRateLimiter({
       };
     }
 
-    const safeClientId = String(clientId || 'local').slice(0, 120);
+    const safeClientId = normalizeClientId(clientId);
     const currentTime = now();
     let entry = clients.get(safeClientId);
 
@@ -153,9 +162,9 @@ export function getClientIdFromRequest(request, { trustProxy = false } = {}) {
   if (trustProxy) {
     const forwardedFor = request.headers?.['x-forwarded-for'];
     if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
-      return forwardedFor.split(',')[0].trim().slice(0, 120);
+      return normalizeClientId(forwardedFor.split(',')[0]);
     }
   }
 
-  return request.socket?.remoteAddress || request.connection?.remoteAddress || 'local';
+  return normalizeClientId(request.socket?.remoteAddress || request.connection?.remoteAddress);
 }

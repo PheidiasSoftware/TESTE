@@ -17,10 +17,10 @@ export function normalizeServerEventName(value, fallback = 'message') {
 
 export function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
+    ...headers,
     ...SECURITY_HEADERS,
     'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-    ...headers
+    'cache-control': 'no-store'
   });
   response.end(JSON.stringify(payload, null, 2));
 }

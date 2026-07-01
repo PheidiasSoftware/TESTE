@@ -83,8 +83,10 @@ test('sendJson responde JSON sem cache persistente e com headers de segurança',
   assert.deepEqual(JSON.parse(response.chunks.join('')), { ok: true });
 });
 
-test('normalizeServerEventName remove quebras de linha e usa fallback seguro', () => {
-  assert.equal(normalizeServerEventName('token\nretry: 0\r'), 'tokenretry: 0');
+test('normalizeServerEventName remove caracteres fora do token seguro e usa fallback', () => {
+  assert.equal(normalizeServerEventName('token\nretry: 0\r'), 'tokenretry0');
+  assert.equal(normalizeServerEventName(' token.created-v1_ok '), 'token.created-v1_ok');
+  assert.equal(normalizeServerEventName('evento com espaço'), 'eventocomespao');
   assert.equal(normalizeServerEventName('\n\t'), 'message');
   assert.equal(normalizeServerEventName(null), 'message');
   assert.equal(normalizeServerEventName(null, 'safe'), 'safe');
@@ -103,7 +105,7 @@ test('sendServerEvent normaliza nome de evento SSE antes de escrever no stream',
 
   sendServerEvent(response, 'token\nevent: error', { token: 'abc' });
 
-  assert.equal(response.chunks.join(''), 'event: tokenevent: error\ndata: {"token":"abc"}\n\n');
+  assert.equal(response.chunks.join(''), 'event: tokeneventerror\ndata: {"token":"abc"}\n\n');
 });
 
 test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {

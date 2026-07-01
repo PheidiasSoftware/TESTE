@@ -122,6 +122,9 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 - [Seleção de modelos leves](docs/model-selection.md)
 - [Integração de clientes locais](docs/client-integration.md)
 - [Validação local do backend](docs/local-validation.md)
+- [Ajuste seguro do Ollama para PC fraco](docs/ollama-runtime-tuning.md)
+- [Smoke tests HTTP offline da API](docs/api-smoke-tests.md)
+- [Headers de segurança da API](docs/security-headers.md)
 
 ## Variáveis de ambiente
 
@@ -218,34 +221,3 @@ Gera resposta por streaming usando Server-Sent Events. É útil para respostas l
 Guia técnico completo: [`docs/streaming.md`](docs/streaming.md).
 
 Eventos emitidos:
-
-- `metadata`: dados iniciais da requisição, cache, fila e contexto.
-- `token`: pedaços de texto gerados pelo modelo.
-- `done`: finalização bem-sucedida.
-- `error`: erro durante a geração em streaming.
-
-### `POST /api/large-code-plan`
-
-Cria um plano de geração grande em etapas pequenas, sem chamar o Ollama. Use para tarefas como CRUD completo, módulo grande, vários arquivos ou contexto extenso.
-
-```bash
-curl -X POST http://127.0.0.1:3131/api/large-code-plan ^
-  -H "Content-Type: application/json" ^
-  -d "{\"task\":\"Criar CRUD completo de clientes com testes\",\"language\":\"Node.js\",\"contextFiles\":[\"src/server.js\"],\"targetFiles\":[\"src/modules/customers/routes.js\"]}"
-```
-
-A resposta traz `steps`. Cada `steps[n].task` deve ser enviado depois para `POST /api/generate-stream`, mantendo a geração incremental e adequada a PC fraco.
-
-Guia técnico completo: [`docs/large-code-generation.md`](docs/large-code-generation.md).
-
-### `POST /api/read-file`
-
-Lê um arquivo textual pequeno dentro da pasta do projeto para alimentar contexto de programação, sem executar código.
-
-```bash
-curl -X POST http://127.0.0.1:3131/api/read-file ^
-  -H "Content-Type: application/json" ^
-  -d "{\"path\":\"src/server.js\"}"
-```
-
-Proteções aplicadas:

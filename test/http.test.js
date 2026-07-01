@@ -8,7 +8,8 @@ import {
   readJsonBody,
   SECURITY_HEADERS,
   sendJson,
-  sendServerEvent
+  sendServerEvent,
+  stringifyServerEventPayload
 } from '../src/http.js';
 
 function createMockResponse() {
@@ -112,6 +113,20 @@ test('normalizeServerEventName remove caracteres fora do token seguro e usa fall
   assert.equal(normalizeServerEventName(null, 'safe'), 'safe');
 });
 
+test('stringifyServerEventPayload serializa valores não JSON sem quebrar SSE', () => {
+  assert.equal(
+    stringifyServerEventPayload({ id: 1n, marker: Symbol('x'), work: () => true, error: new Error('falha') }),
+    '{"id":"1","marker":"[Symbol]","work":"[Function]","error":{"name":"Error","message":"falha"}}'
+  );
+});
+
+test('stringifyServerEventPayload usa fallback seguro para payload circular', () => {
+  const payload = { ok: true };
+  payload.self = payload;
+
+  assert.equal(stringifyServerEventPayload(payload), '{"error":"Payload SSE não serializável."}');
+});
+
 test('sendServerEvent formata evento SSE em uma única mensagem', () => {
   const response = createMockResponse();
 
@@ -126,6 +141,14 @@ test('sendServerEvent normaliza nome de evento SSE antes de escrever no stream',
   sendServerEvent(response, 'token\nevent: error', { token: 'abc' });
 
   assert.equal(response.chunks.join(''), 'event: tokeneventerror\ndata: {"token":"abc"}\n\n');
+});
+
+test('sendServerEvent não quebra com payload SSE contendo BigInt', () => {
+  const response = createMockResponse();
+
+  sendServerEvent(response, 'metadata', { requestId: 1n });
+
+  assert.equal(response.chunks.join(''), 'event: metadata\ndata: {"requestId":"1"}\n\n');
 });
 
 test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {

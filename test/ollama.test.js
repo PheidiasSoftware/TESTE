@@ -263,6 +263,24 @@ test('readOllamaStream parses final JSONL even without trailing newline', async 
   assert.deepEqual(result, { response: 'fim', done: true, total_duration: 101 });
 });
 
+test('readOllamaStream accepts large chunks made of safe JSONL lines', async () => {
+  const encoder = new TextEncoder();
+  const lineCount = 10_000;
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode('{"response":"a","done":false}\n'.repeat(lineCount)));
+      controller.enqueue(encoder.encode('{"done":true,"total_duration":99}\n'));
+      controller.close();
+    }
+  });
+
+  const result = await readOllamaStream(stream);
+
+  assert.equal(result.response, 'a'.repeat(lineCount));
+  assert.equal(result.done, true);
+  assert.equal(result.total_duration, 99);
+});
+
 test('readOllamaStream rejects a malformed oversized JSONL line before growing memory unbounded', async () => {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

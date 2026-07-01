@@ -4,6 +4,7 @@ export const SECURITY_HEADERS = {
   'x-frame-options': 'DENY',
   'referrer-policy': 'no-referrer',
   'cross-origin-resource-policy': 'same-origin',
+  'cross-origin-opener-policy': 'same-origin',
   'permissions-policy': 'camera=(), microphone=(), geolocation=()'
 };
 

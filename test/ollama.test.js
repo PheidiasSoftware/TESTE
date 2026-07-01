@@ -208,6 +208,25 @@ test('createOllamaClient maps malformed JSON shape to safe backend error', async
   );
 });
 
+test('createOllamaClient maps streaming response without body to safe backend error', async () => {
+  const client = createOllamaClient({
+    baseUrl: 'http://127.0.0.1:11434',
+    model: 'qwen',
+    fetchImpl: async () => ({
+      ok: true,
+      body: null
+    })
+  });
+
+  await assert.rejects(
+    () => client.generateStream('teste'),
+    error => error.statusCode === 502
+      && error.message === 'Runtime local não retornou corpo de streaming.'
+      && error.exposeDetail === false
+      && error.upstreamErrorDetail === undefined
+  );
+});
+
 test('readOllamaStream aggregates tokens and notifies caller', async () => {
   const encoder = new TextEncoder();
   const tokens = [];

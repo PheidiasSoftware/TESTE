@@ -45,7 +45,7 @@ export const SENSITIVE_LOG_KEY_PATTERN = /(authorization|api[_-]?key|token|secre
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_MODEL = 'qwen2.5-coder:1.5b-instruct';
 const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
-const ALLOWED_LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+const ALLOWED_LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 const MODEL_NAME_PATTERN = /^[a-z0-9][a-z0-9._/-]{0,119}(?::[a-z0-9][a-z0-9._-]{0,63})?$/i;
 
 export function parseInteger(value, fallback) {
@@ -67,7 +67,8 @@ export function normalizeHost(value, fallback = DEFAULT_HOST) {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized) return fallback;
 
-  return ALLOWED_LOCAL_HOSTS.has(normalized) ? normalized : fallback;
+  const host = normalized === '[::1]' ? '::1' : normalized;
+  return ALLOWED_LOCAL_HOSTS.has(host) ? host : fallback;
 }
 
 export function parsePort(value, fallback = 3131) {

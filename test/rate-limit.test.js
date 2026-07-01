@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createFixedWindowRateLimiter, getClientIdFromRequest } from '../src/rate-limit.js';
+import { createFixedWindowRateLimiter, getClientIdFromRequest, normalizeClientId } from '../src/rate-limit.js';
 
 test('createFixedWindowRateLimiter permite até o limite e bloqueia excedente', () => {
   let currentTime = 1_700_000_000_000;
@@ -92,17 +92,24 @@ test('createFixedWindowRateLimiter poda clientes expirados para limitar memória
   assert.equal(limiter.getStatus().prunedClients, 2);
 });
 
+test('normalizeClientId remove controles, limita tamanho e usa fallback seguro', () => {
+  assert.equal(normalizeClientId(' cliente\nlocal\t01 '), 'cliente local 01');
+  assert.equal(normalizeClientId(''), 'local');
+  assert.equal(normalizeClientId(null), 'local');
+  assert.equal(normalizeClientId('x'.repeat(130)).length, 120);
+});
+
 test('getClientIdFromRequest usa socket por padrão e proxy apenas quando habilitado', () => {
   const request = {
     headers: {
-      'x-forwarded-for': 'cliente-proxy, gateway-local'
+      'x-forwarded-for': 'cliente-proxy\nunsafe, gateway-local'
     },
     socket: {
-      remoteAddress: 'cliente-socket'
+      remoteAddress: 'cliente-socket\tlocal'
     }
   };
 
-  assert.equal(getClientIdFromRequest(request), 'cliente-socket');
-  assert.equal(getClientIdFromRequest(request, { trustProxy: true }), 'cliente-proxy');
+  assert.equal(getClientIdFromRequest(request), 'cliente-socket local');
+  assert.equal(getClientIdFromRequest(request, { trustProxy: true }), 'cliente-proxy unsafe');
   assert.equal(getClientIdFromRequest(null), 'local');
 });

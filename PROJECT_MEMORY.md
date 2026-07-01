@@ -257,3 +257,61 @@ Executar uma melhoria pequena, segura e reversível: adicionar um script PowerSh
 ### Próximo passo sugerido
 
 Na próxima execução segura, priorizar leitura segura de arquivos do projeto com allowlist e limite de tamanho, pois isso aproxima o backend de um assistente útil para programação sem permitir execução automática insegura de código.
+
+## 2026-07-01 15:38 - Header anti-indexação para API local
+
+### Avaliação inicial
+
+- Repositório analisado antes de qualquer alteração.
+- Arquivos conferidos nesta execução: `README.md`, `package.json`, `memory.md`, `PROJECT_MEMORY.md`, `src/http.js`, `src/server.js`, `test/http.test.js`, `test/server.test.js` e `docs/security-headers.md`.
+- `README.md` confirma backend Node.js nativo, sem dependências externas, com Ollama local, scripts Windows, testes offline, rotas de geração, streaming, leitura segura de arquivos, cache, rate limit e documentação técnica.
+- `package.json` segue leve, usando `node --test` e scripts PowerShell para Windows, sem dependências pesadas.
+- `src/http.js` centraliza headers de segurança, JSON seguro, SSE e leitura de corpo com limite.
+- `src/server.js` mantém rotas locais, rate limit, sanitização de status público e logs estruturados.
+- `test/http.test.js` e `test/server.test.js` cobrem contratos offline sem chamar Ollama.
+- PRs recentes no repositório: nenhum encontrado pelo conector.
+- Não foram encontrados registros claros de Claude Agent, branches, PRs, issues ou instruções conflitantes nos arquivos e buscas consultados nesta execução.
+
+### Decisão tomada
+
+Executar uma melhoria pequena, segura e reversível no contrato HTTP: adicionar `X-Robots-Tag: noindex, nofollow, noarchive` às respostas JSON e SSE pelo helper central. A medida reduz o risco de indexação/arquivamento caso a API local seja exposta por engano por proxy, túnel ou configuração incorreta, sem custo relevante de CPU/RAM e sem dependências externas.
+
+### Arquivos alterados/criados
+
+- `src/http.js`
+  - Adicionado `x-robots-tag` em `SECURITY_HEADERS`, aplicado automaticamente por `sendJson()` e `openEventStream()`.
+
+- `test/http.test.js`
+  - Atualizado contrato de `SECURITY_HEADERS`.
+  - Adicionadas validações de `x-robots-tag` em respostas JSON e SSE.
+
+- `docs/security-headers.md`
+  - Documentado o novo header, objetivo e observação de que ele é defesa auxiliar, não substitui manter `HOST=127.0.0.1` e evitar exposição pública.
+
+- `PROJECT_MEMORY.md`
+  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos, pendências e próximo passo.
+
+### Validações executadas
+
+- Revisão estática manual dos arquivos alterados.
+- Conferido que a mudança fica centralizada em `src/http.js` e afeta JSON/SSE sem alterar payloads, rotas ou chamadas ao Ollama.
+- Conferido que os testes atualizados permanecem offline e usam apenas recursos nativos do Node.js.
+- Conferido que nenhuma dependência externa foi adicionada.
+- Não foi possível executar `npm test` neste ambiente porque não há checkout local autorizado para execução; validação final deve ocorrer por CI ou em Windows/Node.js 20+.
+
+### Riscos
+
+- `X-Robots-Tag` depende de clientes/crawlers respeitarem o header; é uma defesa em profundidade, não controle de acesso.
+- O backend continua devendo ser usado localmente, preferencialmente em `127.0.0.1`, sem túnel público.
+- Como não houve execução de testes nesta automação, ainda é necessário validar `npm test` em ambiente local/CI.
+
+### Pendências atualizadas
+
+1. Executar `npm test` em checkout local com Node.js 20+.
+2. Testar scripts PowerShell em Windows real com Ollama instalado.
+3. Continuar endurecimento incremental de contratos HTTP/SSE e validação offline.
+4. Avaliar documentação de integração futura com cliente local/VS Code sem CORS amplo por padrão.
+
+### Próximo passo sugerido
+
+Na próxima execução segura, priorizar um teste offline de headers nas rotas reais (`/health`, `/api/status`, 404 e 405) ou documentação de integração local para clientes Node.js/Flutter sem expor a API fora de `127.0.0.1`.

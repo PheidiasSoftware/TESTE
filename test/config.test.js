@@ -5,6 +5,7 @@ import {
   DEFAULT_ALLOWED_FILE_EXTENSIONS,
   RUNTIME_NUMERIC_LIMITS,
   getAllowedFileExtensions,
+  isAllowedLocalOllamaHost,
   loadConfig,
   normalizeAllowedFileExtension,
   normalizeHost,
@@ -145,10 +146,22 @@ test('parsePort accepts only valid TCP port range values', () => {
   assert.equal(parsePort(undefined, 8080), 8080);
 });
 
-test('normalizeOllamaUrl accepts http and https URLs only', () => {
+test('isAllowedLocalOllamaHost allows only loopback hostnames', () => {
+  assert.equal(isAllowedLocalOllamaHost('localhost'), true);
+  assert.equal(isAllowedLocalOllamaHost('127.0.0.1'), true);
+  assert.equal(isAllowedLocalOllamaHost('127.10.20.30'), true);
+  assert.equal(isAllowedLocalOllamaHost('::1'), true);
+  assert.equal(isAllowedLocalOllamaHost('ollama.local'), false);
+  assert.equal(isAllowedLocalOllamaHost('192.168.0.10'), false);
+  assert.equal(isAllowedLocalOllamaHost('example.com'), false);
+});
+
+test('normalizeOllamaUrl accepts only local http and https URLs', () => {
   assert.equal(normalizeOllamaUrl(' http://localhost:11434/ '), 'http://localhost:11434');
-  assert.equal(normalizeOllamaUrl('https://ollama.local:11434/'), 'https://ollama.local:11434');
+  assert.equal(normalizeOllamaUrl('https://127.0.0.1:11434/'), 'https://127.0.0.1:11434');
   assert.equal(normalizeOllamaUrl('ftp://127.0.0.1:11434'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('https://ollama.local:11434/'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('http://192.168.0.10:11434/'), 'http://127.0.0.1:11434');
   assert.equal(normalizeOllamaUrl('not a url'), 'http://127.0.0.1:11434');
 });
 
@@ -165,9 +178,10 @@ test('normalizeOllamaUrl strips query, hash and credentials before exposing conf
   );
 });
 
-test('loadConfig normalizes Ollama URL to a safe endpoint string', () => {
+test('loadConfig normalizes Ollama URL to a safe local endpoint string', () => {
   assert.equal(loadConfig({ OLLAMA_URL: ' http://127.0.0.1:11434/// ' }).OLLAMA_URL, 'http://127.0.0.1:11434');
   assert.equal(loadConfig({ OLLAMA_URL: 'file:///tmp/ollama.sock' }).OLLAMA_URL, 'http://127.0.0.1:11434');
+  assert.equal(loadConfig({ OLLAMA_URL: 'http://10.0.0.20:11434' }).OLLAMA_URL, 'http://127.0.0.1:11434');
 });
 
 test('loadConfig normalizes minimum values for safety limits', () => {

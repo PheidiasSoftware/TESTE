@@ -159,6 +159,25 @@ export async function readOllamaStream(body, { onToken } = {}) {
   let buffer = '';
   let fullResponse = '';
 
+  function handleParsedLine(parsed) {
+    if (!parsed) return null;
+
+    if (parsed.response) {
+      fullResponse += parsed.response;
+      onToken?.(parsed.response, parsed.raw);
+    }
+
+    if (parsed.done) {
+      return {
+        response: fullResponse,
+        done: true,
+        total_duration: parsed.total_duration
+      };
+    }
+
+    return null;
+  }
+
   while (true) {
     const chunk = await reader.read();
     buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
@@ -166,25 +185,15 @@ export async function readOllamaStream(body, { onToken } = {}) {
     buffer = lines.pop() || '';
 
     for (const line of lines) {
-      const parsed = parseOllamaStreamLine(line);
-      if (!parsed) continue;
-
-      if (parsed.response) {
-        fullResponse += parsed.response;
-        onToken?.(parsed.response, parsed.raw);
-      }
-
-      if (parsed.done) {
-        return {
-          response: fullResponse,
-          done: true,
-          total_duration: parsed.total_duration
-        };
-      }
+      const result = handleParsedLine(parseOllamaStreamLine(line));
+      if (result) return result;
     }
 
     if (chunk.done) break;
   }
+
+  const finalResult = handleParsedLine(parseOllamaStreamLine(buffer));
+  if (finalResult) return finalResult;
 
   return { response: fullResponse, done: false };
 }

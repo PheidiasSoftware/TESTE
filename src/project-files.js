@@ -13,6 +13,10 @@ export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowe
     throw Object.assign(new Error('Campo obrigatório: path precisa ser texto.'), { statusCode: 400 });
   }
 
+  if (requestedPath.trim() !== requestedPath) {
+    throw Object.assign(new Error('Caminho não pode ter espaços no início ou fim.'), { statusCode: 400 });
+  }
+
   if (requestedPath.includes('\0')) {
     throw Object.assign(new Error('Caminho inválido.'), { statusCode: 400 });
   }

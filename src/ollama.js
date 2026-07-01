@@ -76,11 +76,16 @@ export function normalizeOllamaGenerateResult(value) {
     throw createSafeUpstreamError('Resposta inválida do Ollama.');
   }
 
-  return {
+  const result = {
     response: value.response,
-    done: Boolean(value.done),
-    total_duration: Number.isFinite(value.total_duration) ? value.total_duration : undefined
+    done: Boolean(value.done)
   };
+
+  if (Number.isFinite(value.total_duration)) {
+    result.total_duration = value.total_duration;
+  }
+
+  return result;
 }
 
 export function parseOllamaStreamLine(line) {

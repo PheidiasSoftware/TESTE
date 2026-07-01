@@ -100,6 +100,7 @@ export function parseOllamaStreamLine(line) {
       response: typeof parsed.response === 'string' ? parsed.response : '',
       done: Boolean(parsed.done),
       total_duration: Number.isFinite(parsed.total_duration) ? parsed.total_duration : undefined,
+      error: typeof parsed.error === 'string' ? parsed.error : undefined,
       raw: parsed
     };
   } catch {
@@ -188,6 +189,10 @@ export async function readOllamaStream(body, { onToken } = {}) {
 
   function handleParsedLine(parsed) {
     if (!parsed) return null;
+
+    if (parsed.error) {
+      throw createSafeUpstreamError('Falha ao chamar Ollama em streaming.', { detail: parsed.error });
+    }
 
     if (parsed.response) {
       fullResponse += parsed.response;

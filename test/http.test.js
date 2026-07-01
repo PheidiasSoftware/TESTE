@@ -57,6 +57,7 @@ function createAbortedMockRequest() {
 
 test('SECURITY_HEADERS define proteções HTTP leves e estáveis', () => {
   assert.deepEqual(SECURITY_HEADERS, {
+    'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
@@ -73,6 +74,7 @@ test('sendJson responde JSON sem cache persistente e com headers de segurança',
   assert.equal(response.statusCode, 201);
   assert.equal(response.headers['content-type'], 'application/json; charset=utf-8');
   assert.equal(response.headers['cache-control'], 'no-store');
+  assert.equal(response.headers['content-security-policy'], "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
@@ -116,6 +118,7 @@ test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers['content-type'], 'text/event-stream; charset=utf-8');
   assert.equal(response.headers['cache-control'], 'no-store, no-transform');
+  assert.equal(response.headers['content-security-policy'], "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.equal(response.headers['referrer-policy'], 'no-referrer');

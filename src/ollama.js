@@ -1,3 +1,5 @@
+export const MAX_OLLAMA_STREAM_LINE_CHARS = 262_144;
+
 const DEFAULT_OLLAMA_OPTIONS = Object.freeze({
   num_ctx: 2048,
   num_predict: 512,
@@ -187,6 +189,14 @@ export async function readOllamaStream(body, { onToken } = {}) {
   let buffer = '';
   let fullResponse = '';
 
+  function assertSafeStreamBuffer() {
+    if (buffer.length <= MAX_OLLAMA_STREAM_LINE_CHARS) return;
+
+    throw createSafeUpstreamError('Streaming do Ollama excedeu limite de linha segura.', {
+      detail: `stream line larger than ${MAX_OLLAMA_STREAM_LINE_CHARS} characters`
+    });
+  }
+
   function handleParsedLine(parsed) {
     if (!parsed) return null;
 
@@ -214,6 +224,7 @@ export async function readOllamaStream(body, { onToken } = {}) {
     while (true) {
       const chunk = await reader.read();
       buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
+      assertSafeStreamBuffer();
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
 

@@ -58,6 +58,31 @@ test('redactForLog limita strings longas e arrays grandes para preservar memóri
   assert.equal(result.items.length, 20);
 });
 
+test('redactForLog normaliza valores não JSON sem quebrar logs estruturados', () => {
+  function namedHandler() {}
+  const error = Object.assign(new Error('falha segura'), {
+    code: 'LOCAL_FAILURE',
+    statusCode: 500
+  });
+
+  const result = redactForLog({
+    count: 10n,
+    marker: Symbol('local'),
+    handler: namedHandler,
+    error
+  });
+
+  assert.equal(result.count, '10');
+  assert.equal(result.marker, 'Symbol(local)');
+  assert.equal(result.handler, '[function namedHandler]');
+  assert.deepEqual(result.error, {
+    name: 'Error',
+    message: 'falha segura',
+    code: 'LOCAL_FAILURE',
+    statusCode: 500
+  });
+});
+
 test('createStructuredLogger emite JSON Lines com nível e redaction', () => {
   const logs = [];
   const logger = createStructuredLogger({
@@ -78,6 +103,27 @@ test('createStructuredLogger emite JSON Lines com nível e redaction', () => {
   assert.equal(parsed.event, 'request.received');
   assert.equal(parsed.requestId, 'abc');
   assert.equal(parsed.prompt, '[redacted]');
+});
+
+test('createStructuredLogger serializa detalhes não JSON com segurança', () => {
+  const logs = [];
+  const logger = createStructuredLogger({
+    level: 'info',
+    sink: line => logs.push(line),
+    now: () => new Date('2026-07-01T04:20:57.000Z')
+  });
+
+  logger.info('runtime.metric', {
+    requestId: 'abc',
+    activeBytes: 123n,
+    marker: Symbol('safe')
+  });
+
+  assert.equal(logs.length, 1);
+  const parsed = JSON.parse(logs[0]);
+
+  assert.equal(parsed.activeBytes, '123');
+  assert.equal(parsed.marker, 'Symbol(safe)');
 });
 
 test('createStructuredLogger respeita nível silent', () => {

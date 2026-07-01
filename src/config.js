@@ -88,6 +88,14 @@ function isValidLoopbackIPv4(hostname) {
   });
 }
 
+function getRawUrlHost(value) {
+  const match = String(value || '')
+    .trim()
+    .match(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@/?#]*@)?(\[[^\]]+\]|[^:/?#]+)/i);
+
+  return match?.[1] || '';
+}
+
 export function isAllowedLocalOllamaHost(hostname) {
   const normalized = String(hostname || '').trim().toLowerCase();
   if (!normalized) return false;
@@ -102,6 +110,9 @@ export function normalizeOllamaUrl(value, fallback = DEFAULT_OLLAMA_URL) {
   if (!raw) return fallback;
 
   try {
+    const rawHost = getRawUrlHost(raw);
+    if (!isAllowedLocalOllamaHost(rawHost)) return fallback;
+
     const url = new URL(raw);
     if (!['http:', 'https:'].includes(url.protocol)) return fallback;
     if (!isAllowedLocalOllamaHost(url.hostname)) return fallback;

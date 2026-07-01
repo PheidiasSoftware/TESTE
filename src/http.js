@@ -5,6 +5,7 @@ export const SECURITY_HEADERS = {
   'referrer-policy': 'no-referrer',
   'cross-origin-resource-policy': 'same-origin',
   'cross-origin-opener-policy': 'same-origin',
+  'x-permitted-cross-domain-policies': 'none',
   'permissions-policy': 'camera=(), microphone=(), geolocation=()'
 };
 

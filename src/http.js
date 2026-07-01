@@ -8,7 +8,7 @@ export const SECURITY_HEADERS = {
 
 export function normalizeServerEventName(value, fallback = 'message') {
   const normalized = typeof value === 'string'
-    ? value.replace(/[\u0000-\u001F\u007F]+/g, '').trim()
+    ? value.replace(/[^A-Za-z0-9_.-]+/g, '').trim()
     : '';
 
   return normalized || fallback;

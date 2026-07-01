@@ -77,6 +77,20 @@ function assertLargeCodeSuggestion(body) {
   assert.equal(typeof body.requestId, 'string');
 }
 
+function assertJsonSecurityHeaders(response) {
+  assert.equal(response.headers.get('content-type').startsWith('application/json'), true);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
+  assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin');
+  assert.equal(response.headers.get('cross-origin-opener-policy'), 'same-origin');
+  assert.equal(response.headers.get('x-permitted-cross-domain-policies'), 'none');
+  assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=()');
+}
+
 test('buildCodingPrompt inclui foco, contexto e tarefa sem depender do Ollama', () => {
   const prompt = buildCodingPrompt({
     task: 'Criar endpoint de health check',
@@ -251,6 +265,22 @@ test('GET /api/status responde métricas sanitizadas da fila sem chamar Ollama',
     assert.ok(Array.isArray(body.fileRead.allowedFileExtensions));
     assertPublicRuntimeContract(body);
     assert.deepEqual(body.routes, EXPECTED_ROUTES);
+  });
+});
+
+test('rotas JSON reais mantêm headers de segurança centralizados', async () => {
+  await withTestServer(async baseUrl => {
+    const responses = [
+      await fetch(`${baseUrl}/health`),
+      await fetch(`${baseUrl}/api/status`),
+      await fetch(`${baseUrl}/api/desconhecida`),
+      await fetch(`${baseUrl}/api/generate`)
+    ];
+
+    for (const response of responses) {
+      assertJsonSecurityHeaders(response);
+      await response.json();
+    }
   });
 });
 

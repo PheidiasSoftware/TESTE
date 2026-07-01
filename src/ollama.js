@@ -74,6 +74,10 @@ export function createSafeUpstreamError(message, { statusCode = 502, detail } = 
 }
 
 export function normalizeOllamaGenerateResult(value) {
+  if (isPlainObject(value) && typeof value.error === 'string' && value.error.trim()) {
+    throw createSafeUpstreamError('Falha ao chamar Ollama.', { detail: value.error });
+  }
+
   if (!isPlainObject(value) || typeof value.response !== 'string') {
     throw createSafeUpstreamError('Resposta inválida do Ollama.');
   }
@@ -150,7 +154,8 @@ export function createOllamaClient({
 
     try {
       return normalizeOllamaGenerateResult(await response.json());
-    } catch {
+    } catch (error) {
+      if (error?.statusCode) throw error;
       throw createSafeUpstreamError('Resposta inválida do Ollama.');
     }
   }

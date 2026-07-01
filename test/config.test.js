@@ -165,10 +165,11 @@ test('normalizeOllamaUrl accepts only local http and https URLs', () => {
   assert.equal(normalizeOllamaUrl('not a url'), 'http://127.0.0.1:11434');
 });
 
-test('normalizeOllamaUrl strips common Ollama API paths to keep client endpoint valid', () => {
+test('normalizeOllamaUrl normalizes any local path to the Ollama runtime root', () => {
   assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/api'), 'http://127.0.0.1:11434');
   assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/api/generate'), 'http://127.0.0.1:11434');
   assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/api/generate/'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/custom/proxy/path'), 'http://127.0.0.1:11434');
 });
 
 test('normalizeOllamaUrl strips query, hash and credentials before exposing config', () => {

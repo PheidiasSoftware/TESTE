@@ -15,6 +15,20 @@ export function normalizeServerEventName(value, fallback = 'message') {
   return normalized || fallback;
 }
 
+export function stringifyServerEventPayload(payload) {
+  try {
+    return JSON.stringify(payload, (_key, value) => {
+      if (typeof value === 'bigint') return value.toString();
+      if (typeof value === 'symbol') return '[Symbol]';
+      if (typeof value === 'function') return '[Function]';
+      if (value instanceof Error) return { name: value.name, message: value.message };
+      return value;
+    });
+  } catch {
+    return JSON.stringify({ error: 'Payload SSE não serializável.' });
+  }
+}
+
 export function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
     ...headers,
@@ -27,7 +41,7 @@ export function sendJson(response, statusCode, payload, headers = {}) {
 
 export function sendServerEvent(response, event, payload) {
   response.write(`event: ${normalizeServerEventName(event)}\n`);
-  response.write(`data: ${JSON.stringify(payload)}\n\n`);
+  response.write(`data: ${stringifyServerEventPayload(payload)}\n\n`);
 }
 
 export function openEventStream(response) {

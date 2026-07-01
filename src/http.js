@@ -3,6 +3,7 @@ export const SECURITY_HEADERS = {
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
   'referrer-policy': 'no-referrer',
+  'x-robots-tag': 'noindex, nofollow, noarchive',
   'cross-origin-resource-policy': 'same-origin',
   'cross-origin-opener-policy': 'same-origin',
   'x-permitted-cross-domain-policies': 'none',

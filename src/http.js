@@ -38,6 +38,10 @@ function createClientClosedError() {
   });
 }
 
+function isPlainJsonObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = true } = {}) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -80,8 +84,19 @@ export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = 
       }
 
       try {
-        finish(JSON.parse(raw));
-      } catch {
+        const parsed = JSON.parse(raw);
+        if (!isPlainJsonObject(parsed)) {
+          fail(Object.assign(new Error('JSON precisa ser um objeto.'), { statusCode: 400 }));
+          return;
+        }
+
+        finish(parsed);
+      } catch (error) {
+        if (error?.statusCode) {
+          fail(error);
+          return;
+        }
+
         fail(Object.assign(new Error('JSON inválido.'), { statusCode: 400 }));
       }
     });

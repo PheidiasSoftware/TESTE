@@ -5,6 +5,7 @@ import {
   buildOllamaGeneratePayload,
   createOllamaClient,
   createSafeUpstreamError,
+  normalizeOllamaGenerateResult,
   parseOllamaStreamLine,
   readOllamaStream,
   sanitizeOllamaOptions,
@@ -67,6 +68,29 @@ test('createSafeUpstreamError keeps sanitized upstream detail internal', () => {
   assert.equal(error.upstreamErrorDetail.length, 300);
   assert.ok(error.upstreamErrorDetail.startsWith('valor privado'));
   assert.equal(error.upstreamErrorDetail.includes('\n'), false);
+});
+
+test('normalizeOllamaGenerateResult accepts expected non-streaming Ollama response', () => {
+  assert.deepEqual(
+    normalizeOllamaGenerateResult({ response: 'ok', done: true, total_duration: 123 }),
+    { response: 'ok', done: true, total_duration: 123 }
+  );
+
+  assert.deepEqual(
+    normalizeOllamaGenerateResult({ response: 'parcial', done: 0 }),
+    { response: 'parcial', done: false }
+  );
+});
+
+test('normalizeOllamaGenerateResult rejects malformed non-streaming Ollama response', () => {
+  for (const value of [null, [], 'ok', { done: true }, { response: 42, done: true }]) {
+    assert.throws(
+      () => normalizeOllamaGenerateResult(value),
+      error => error.statusCode === 502
+        && error.message === 'Resposta inválida do Ollama.'
+        && error.exposeDetail === false
+    );
+  }
 });
 
 test('buildOllamaGeneratePayload rejects missing model or prompt', () => {
@@ -150,6 +174,25 @@ test('createOllamaClient maps invalid JSON response to safe backend error', asyn
     fetchImpl: async () => ({
       ok: true,
       json: async () => { throw new SyntaxError('Unexpected token in JSON'); }
+    })
+  });
+
+  await assert.rejects(
+    () => client.generate('teste'),
+    error => error.statusCode === 502
+      && error.message === 'Resposta inválida do Ollama.'
+      && error.exposeDetail === false
+      && error.upstreamErrorDetail === undefined
+  );
+});
+
+test('createOllamaClient maps malformed JSON shape to safe backend error', async () => {
+  const client = createOllamaClient({
+    baseUrl: 'http://127.0.0.1:11434',
+    model: 'qwen',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ done: true })
     })
   });
 

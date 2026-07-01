@@ -225,6 +225,19 @@ test('readJsonBody lê JSON, aceita corpo vazio e bloqueia payload grande', asyn
   assert.equal(oversizedRequest.destroyedByHelper, true);
 });
 
+test('readJsonBody preserva UTF-8 quando caractere multibyte chega dividido entre chunks', async () => {
+  const payload = Buffer.from('{"emoji":"😀"}', 'utf8');
+  const emojiOffset = payload.indexOf('😀');
+  const splitInsideEmoji = emojiOffset + 1;
+
+  const result = await readJsonBody(createMockRequest([
+    payload.subarray(0, splitInsideEmoji),
+    payload.subarray(splitInsideEmoji)
+  ]));
+
+  assert.deepEqual(result, { emoji: '😀' });
+});
+
 test('readJsonBody rejeita payload grande pelo Content-Length antes de acumular corpo', async () => {
   const oversizedRequest = createMockRequest(['{}'], { headers: { 'content-length': '9999' } });
 

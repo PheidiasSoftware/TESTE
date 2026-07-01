@@ -8,7 +8,17 @@ Este backend foi pensado para uso local em PC fraco com Windows, 8 GB de RAM e s
 OLLAMA_URL=http://127.0.0.1:11434
 ```
 
-Também é aceitável usar `http://localhost:11434` quando o Ollama estiver respondendo no loopback local.
+Também é aceitável usar `http://localhost:11434`, `http://127.x.x.x:11434` ou `http://[::1]:11434` quando o Ollama estiver respondendo no loopback local.
+
+## Contrato do MVP
+
+Por padrão, o backend aceita apenas hosts de loopback para `OLLAMA_URL`:
+
+- `localhost`
+- `127.0.0.1` e demais endereços `127.x.x.x`
+- `::1`
+
+URLs com host remoto, IP de rede local, domínio público, túnel ou serviço externo são normalizadas para o padrão seguro `http://127.0.0.1:11434`. Isso evita que prompts e trechos de código do projeto sejam enviados para fora do computador por configuração acidental.
 
 ## Evite estes formatos
 
@@ -16,6 +26,8 @@ Também é aceitável usar `http://localhost:11434` quando o Ollama estiver resp
 OLLAMA_URL=http://127.0.0.1:11434/api
 OLLAMA_URL=http://127.0.0.1:11434/api/generate
 OLLAMA_URL=http://user:password@127.0.0.1:11434/?token=secret
+OLLAMA_URL=http://192.168.0.10:11434
+OLLAMA_URL=https://ollama.local:11434
 ```
 
 O backend normaliza casos comuns antes de montar a chamada para `/api/generate`, mas manter a variável com a raiz limpa reduz ambiguidade em scripts, logs locais e integrações futuras.
@@ -23,7 +35,7 @@ O backend normaliza casos comuns antes de montar a chamada para `/api/generate`,
 ## Checklist de segurança
 
 - Não use credenciais na URL.
-- Não aponte para runtime remoto sem decisão explícita do usuário.
+- Não aponte para runtime remoto no MVP.
 - Não exponha `OLLAMA_URL` em prints, issues ou documentação com dados reais.
 - Mantenha `HOST=127.0.0.1` quando a API for usada somente na própria máquina.
 - Para PC com 8 GB RAM sem GPU, mantenha `GENERATION_CONCURRENCY=1` e modelo pequeno, como `qwen2.5-coder:1.5b-instruct`.

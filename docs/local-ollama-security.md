@@ -12,6 +12,16 @@ http://127.0.0.1:11434
 
 Evite configurar `OLLAMA_URL` para IPs externos, domínios públicos, túneis ou serviços remotos. Prompts de programação podem conter trechos de código, nomes de arquivos, mensagens de erro, caminhos locais e contexto do projeto.
 
+## O que é aceito no MVP
+
+O backend normaliza `OLLAMA_URL` e só aceita hosts de loopback:
+
+- `localhost`
+- `127.0.0.1` e demais endereços `127.x.x.x`
+- `::1`
+
+Se a variável apontar para IP de rede, domínio público, túnel ou runtime remoto, o backend volta para `http://127.0.0.1:11434`. Essa escolha é conservadora para evitar vazamento acidental de código e prompts.
+
 ## Por que isso importa
 
 Quando `/api/generate` ou `/api/generate-stream` chama o Ollama, o backend envia o prompt final para `/api/generate`. Esse prompt pode incluir:
@@ -43,6 +53,7 @@ npm run start:windows
 - Limita corpo JSON, contexto, quantidade de arquivos e tamanho de leitura.
 - Não executa código gerado pelo usuário.
 - Remove usuário, senha, query string e fragmento ao normalizar `OLLAMA_URL`.
+- Bloqueia `OLLAMA_URL` remoto por padrão no MVP.
 - Redige campos sensíveis nos logs estruturados.
 - Usa fila conservadora para evitar sobrecarga de CPU/RAM.
 

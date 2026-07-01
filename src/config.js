@@ -86,6 +86,12 @@ export function normalizeOllamaUrl(value, fallback = DEFAULT_OLLAMA_URL) {
     url.password = '';
     url.hash = '';
     url.search = '';
+
+    const pathname = url.pathname.replace(/\/+$/, '');
+    if (pathname === '/api' || pathname === '/api/generate') {
+      url.pathname = '';
+    }
+
     return url.toString().replace(/\/+$/, '');
   } catch {
     return fallback;

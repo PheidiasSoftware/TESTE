@@ -46,6 +46,20 @@ test('redactForLog oculta caminhos locais e URLs operacionais sensíveis', () =>
   assert.equal(result.queue.activeGenerations, 1);
 });
 
+test('redactForLog oculta detalhes brutos de erros externos', () => {
+  const result = redactForLog({
+    upstreamErrorDetail: 'prompt do usuário e trecho de código local',
+    detail: 'stack ou payload bruto do runtime local',
+    statusCode: 502,
+    safeSummary: 'Falha ao chamar runtime local.'
+  });
+
+  assert.equal(result.upstreamErrorDetail, '[redacted]');
+  assert.equal(result.detail, '[redacted]');
+  assert.equal(result.statusCode, 502);
+  assert.equal(result.safeSummary, 'Falha ao chamar runtime local.');
+});
+
 test('redactForLog limita strings longas e arrays grandes para preservar memória', () => {
   const longText = 'x'.repeat(400);
   const result = redactForLog({

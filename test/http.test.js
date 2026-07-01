@@ -115,6 +115,11 @@ test('normalizeServerEventName remove caracteres fora do token seguro e usa fall
   assert.equal(normalizeServerEventName(null, 'safe'), 'safe');
 });
 
+test('normalizeServerEventName também normaliza fallback inseguro', () => {
+  assert.equal(normalizeServerEventName('', 'erro\nevent:token'), 'erroeventtoken');
+  assert.equal(normalizeServerEventName('', '\n\t'), 'message');
+});
+
 test('stringifyServerEventPayload serializa valores não JSON sem quebrar SSE', () => {
   assert.equal(
     stringifyServerEventPayload({ id: 1n, marker: Symbol('x'), work: () => true, error: new Error('falha') }),

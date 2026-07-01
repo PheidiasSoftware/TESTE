@@ -1,12 +1,21 @@
 import { createHash } from 'node:crypto';
 
+export function isCacheablePromptValue(value) {
+  return value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && value.done === true
+    && typeof value.response === 'string';
+}
+
 export function createPromptCache({ enabled = true, maxEntries = 20 } = {}) {
   const entries = new Map();
   const metrics = {
     hits: 0,
     misses: 0,
     writes: 0,
-    evictions: 0
+    evictions: 0,
+    skippedWrites: 0
   };
 
   function hashPrompt(prompt) {
@@ -35,6 +44,11 @@ export function createPromptCache({ enabled = true, maxEntries = 20 } = {}) {
 
   function set(prompt, value) {
     if (!enabled || maxEntries <= 0) return null;
+
+    if (!isCacheablePromptValue(value)) {
+      metrics.skippedWrites += 1;
+      return null;
+    }
 
     const key = hashPrompt(prompt);
     if (entries.has(key)) entries.delete(key);
@@ -65,7 +79,8 @@ export function createPromptCache({ enabled = true, maxEntries = 20 } = {}) {
       hits: metrics.hits,
       misses: metrics.misses,
       writes: metrics.writes,
-      evictions: metrics.evictions
+      evictions: metrics.evictions,
+      skippedWrites: metrics.skippedWrites
     };
   }
 

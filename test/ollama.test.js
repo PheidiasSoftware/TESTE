@@ -58,14 +58,14 @@ test('sanitizeUpstreamErrorDetail omits empty or non-text detail', () => {
 
 test('createSafeUpstreamError keeps sanitized upstream detail internal', () => {
   const error = createSafeUpstreamError('Falha ao chamar Ollama.', {
-    detail: ' token\nsecret '.padEnd(400, 'x')
+    detail: ' valor\nprivado '.padEnd(400, 'x')
   });
 
   assert.equal(error.statusCode, 502);
   assert.equal(error.exposeDetail, false);
   assert.equal(error.detail, undefined);
   assert.equal(error.upstreamErrorDetail.length, 300);
-  assert.ok(error.upstreamErrorDetail.startsWith('token secret'));
+  assert.ok(error.upstreamErrorDetail.startsWith('valor privado'));
   assert.equal(error.upstreamErrorDetail.includes('\n'), false);
 });
 
@@ -140,6 +140,25 @@ test('createOllamaClient maps Ollama failures to safe backend error', async () =
       && error.upstreamErrorDetail.includes('modelo não encontrado')
       && error.upstreamErrorDetail.length === 300
       && !error.upstreamErrorDetail.includes('\n')
+  );
+});
+
+test('createOllamaClient maps invalid JSON response to safe backend error', async () => {
+  const client = createOllamaClient({
+    baseUrl: 'http://127.0.0.1:11434',
+    model: 'qwen',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => { throw new SyntaxError('Unexpected token in JSON'); }
+    })
+  });
+
+  await assert.rejects(
+    () => client.generate('teste'),
+    error => error.statusCode === 502
+      && error.message === 'Resposta inválida do Ollama.'
+      && error.exposeDetail === false
+      && error.upstreamErrorDetail === undefined
   );
 });
 

@@ -146,9 +146,15 @@ test('parsePort accepts only valid TCP port range values', () => {
 
 test('normalizeOllamaUrl accepts http and https URLs only', () => {
   assert.equal(normalizeOllamaUrl(' http://localhost:11434/ '), 'http://localhost:11434');
-  assert.equal(normalizeOllamaUrl('https://ollama.local:11434/api/'), 'https://ollama.local:11434/api');
+  assert.equal(normalizeOllamaUrl('https://ollama.local:11434/'), 'https://ollama.local:11434');
   assert.equal(normalizeOllamaUrl('ftp://127.0.0.1:11434'), 'http://127.0.0.1:11434');
   assert.equal(normalizeOllamaUrl('not a url'), 'http://127.0.0.1:11434');
+});
+
+test('normalizeOllamaUrl strips common Ollama API paths to keep client endpoint valid', () => {
+  assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/api'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/api/generate'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/api/generate/'), 'http://127.0.0.1:11434');
 });
 
 test('normalizeOllamaUrl strips query, hash and credentials before exposing config', () => {

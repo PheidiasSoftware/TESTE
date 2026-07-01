@@ -20,23 +20,27 @@ Por padrão, o backend aceita apenas hosts de loopback para `OLLAMA_URL`:
 
 URLs com host remoto, IP de rede local, domínio público, túnel, serviço externo ou IPv4 malformado são normalizadas para o padrão seguro `http://127.0.0.1:11434`. Isso evita que prompts e trechos de código do projeto sejam enviados para fora do computador por configuração acidental e evita endpoints locais ambíguos que falhariam em tempo de execução.
 
+Além disso, qualquer caminho local informado em `OLLAMA_URL` é normalizado para a raiz do runtime. Assim, entradas como `http://127.0.0.1:11434/api`, `http://127.0.0.1:11434/api/generate` ou `http://127.0.0.1:11434/custom/proxy/path` viram `http://127.0.0.1:11434` antes do cliente montar internamente `/api/generate`.
+
 ## Evite estes formatos
 
 ```text
 OLLAMA_URL=http://127.0.0.1:11434/api
 OLLAMA_URL=http://127.0.0.1:11434/api/generate
+OLLAMA_URL=http://127.0.0.1:11434/custom/proxy/path
 OLLAMA_URL=http://user:password@127.0.0.1:11434/?token=secret
 OLLAMA_URL=http://192.168.0.10:11434
 OLLAMA_URL=https://ollama.local:11434
 OLLAMA_URL=http://127.999.999.999:11434
 ```
 
-O backend normaliza casos comuns antes de montar a chamada para `/api/generate`, mas manter a variável com a raiz limpa reduz ambiguidade em scripts, logs locais e integrações futuras.
+O backend normaliza esses casos antes de montar a chamada para `/api/generate`, mas manter a variável com a raiz limpa reduz ambiguidade em scripts, logs locais e integrações futuras.
 
 ## Checklist de segurança
 
 - Não use credenciais na URL.
 - Não aponte para runtime remoto no MVP.
+- Não use caminhos ou endpoints prontos em `OLLAMA_URL`; informe somente a raiz do runtime local.
 - Não use IPv4 local malformado; prefira `127.0.0.1`.
 - Não exponha `OLLAMA_URL` em prints, issues ou documentação com dados reais.
 - Mantenha `HOST=127.0.0.1` quando a API for usada somente na própria máquina.

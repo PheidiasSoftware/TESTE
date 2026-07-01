@@ -165,6 +165,13 @@ test('normalizeOllamaUrl accepts only local http and https URLs', () => {
   assert.equal(normalizeOllamaUrl('not a url'), 'http://127.0.0.1:11434');
 });
 
+test('normalizeOllamaUrl rejects ambiguous IPv4 aliases before URL parser normalization', () => {
+  assert.equal(normalizeOllamaUrl('http://127.1:11434'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('http://2130706433:11434'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('http://0x7f000001:11434'), 'http://127.0.0.1:11434');
+  assert.equal(normalizeOllamaUrl('http://0177.0.0.1:11434'), 'http://127.0.0.1:11434');
+});
+
 test('normalizeOllamaUrl normalizes any local path to the Ollama runtime root', () => {
   assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/api'), 'http://127.0.0.1:11434');
   assert.equal(normalizeOllamaUrl('http://127.0.0.1:11434/api/generate'), 'http://127.0.0.1:11434');

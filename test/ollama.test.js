@@ -5,6 +5,7 @@ import {
   buildOllamaGeneratePayload,
   createOllamaClient,
   createSafeUpstreamError,
+  MAX_OLLAMA_STREAM_LINE_CHARS,
   normalizeOllamaGenerateResult,
   parseOllamaStreamLine,
   readOllamaStream,
@@ -260,6 +261,24 @@ test('readOllamaStream parses final JSONL even without trailing newline', async 
 
   assert.deepEqual(tokens, ['fim']);
   assert.deepEqual(result, { response: 'fim', done: true, total_duration: 101 });
+});
+
+test('readOllamaStream rejects a malformed oversized JSONL line before growing memory unbounded', async () => {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode('x'.repeat(MAX_OLLAMA_STREAM_LINE_CHARS + 1)));
+      controller.close();
+    }
+  });
+
+  await assert.rejects(
+    () => readOllamaStream(stream),
+    error => error.statusCode === 502
+      && error.message === 'Streaming do Ollama excedeu limite de linha segura.'
+      && error.exposeDetail === false
+      && error.upstreamErrorDetail.includes(String(MAX_OLLAMA_STREAM_LINE_CHARS))
+  );
 });
 
 test('readOllamaStream releases reader lock after early done result', async () => {

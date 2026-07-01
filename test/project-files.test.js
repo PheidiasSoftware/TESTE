@@ -28,6 +28,20 @@ test('validateSafeProjectFilePath permite arquivo relativo com extensão aprovad
   assert.equal(toPosixPath(result.relativePath), 'src/index.js');
 });
 
+test('validateSafeProjectFilePath rejeita espaços no início ou fim do caminho', () => {
+  const projectRoot = join(tmpdir(), 'projeto-teste');
+
+  assert.throws(
+    () => validateSafeProjectFilePath({ requestedPath: ' src/index.js', projectRoot, allowedFileExtensions: ['.js'] }),
+    error => error.statusCode === 400 && /espaços no início ou fim/.test(error.message)
+  );
+
+  assert.throws(
+    () => validateSafeProjectFilePath({ requestedPath: 'src/index.js ', projectRoot, allowedFileExtensions: ['.js'] }),
+    error => error.statusCode === 400 && /espaços no início ou fim/.test(error.message)
+  );
+});
+
 test('validateSafeProjectFilePath bloqueia travessia, dependências e .env', () => {
   const projectRoot = join(tmpdir(), 'projeto-teste');
 

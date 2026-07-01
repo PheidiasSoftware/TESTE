@@ -18,6 +18,7 @@ O helper HTTP central aplica os headers abaixo em respostas JSON e em streams SS
 | `referrer-policy` | `no-referrer` | Evita envio de URL local como referência. |
 | `cross-origin-resource-policy` | `same-origin` | Reduz exposição de recursos para outras origens. |
 | `cross-origin-opener-policy` | `same-origin` | Isola o contexto de navegação contra interações cross-origin indesejadas quando respostas forem abertas por navegador local. |
+| `x-permitted-cross-domain-policies` | `none` | Bloqueia políticas cross-domain legadas, mantendo o backend textual restrito ao uso local esperado. |
 | `permissions-policy` | `camera=(), microphone=(), geolocation=()` | Desativa permissões de navegador que o backend textual não precisa. |
 
 ## Rotas cobertas

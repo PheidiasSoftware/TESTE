@@ -65,6 +65,7 @@ test('SECURITY_HEADERS define proteções HTTP leves e estáveis', () => {
     'referrer-policy': 'no-referrer',
     'cross-origin-resource-policy': 'same-origin',
     'cross-origin-opener-policy': 'same-origin',
+    'x-permitted-cross-domain-policies': 'none',
     'permissions-policy': 'camera=(), microphone=(), geolocation=()'
   });
 });
@@ -83,6 +84,7 @@ test('sendJson responde JSON sem cache persistente e com headers de segurança',
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
   assert.equal(response.headers['cross-origin-resource-policy'], 'same-origin');
   assert.equal(response.headers['cross-origin-opener-policy'], 'same-origin');
+  assert.equal(response.headers['x-permitted-cross-domain-policies'], 'none');
   assert.equal(response.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
   assert.equal(response.headers['x-test'], '1');
   assert.equal(response.ended, true);
@@ -97,6 +99,7 @@ test('sendJson não permite sobrescrever headers críticos por engano', () => {
     'cache-control': 'public, max-age=3600',
     'content-security-policy': "default-src *",
     'x-content-type-options': 'unsafe',
+    'x-permitted-cross-domain-policies': 'all',
     allow: 'GET'
   });
 
@@ -104,6 +107,7 @@ test('sendJson não permite sobrescrever headers críticos por engano', () => {
   assert.equal(response.headers['cache-control'], 'no-store');
   assert.equal(response.headers['content-security-policy'], SECURITY_HEADERS['content-security-policy']);
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers['x-permitted-cross-domain-policies'], 'none');
   assert.equal(response.headers.allow, 'GET');
 });
 
@@ -199,6 +203,7 @@ test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
   assert.equal(response.headers['cross-origin-resource-policy'], 'same-origin');
   assert.equal(response.headers['cross-origin-opener-policy'], 'same-origin');
+  assert.equal(response.headers['x-permitted-cross-domain-policies'], 'none');
   assert.equal(response.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
   assert.equal(response.headers.connection, 'keep-alive');
 });

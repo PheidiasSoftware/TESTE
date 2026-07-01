@@ -12,6 +12,7 @@ O helper HTTP central aplica os headers abaixo em respostas JSON e em streams SS
 
 | Header | Valor | Motivo |
 | --- | --- | --- |
+| `content-security-policy` | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` | Mantém respostas da API sem carregamento de recursos, sem incorporação por páginas externas, sem base URL e sem envio de formulários. |
 | `x-content-type-options` | `nosniff` | Evita interpretação automática de tipo de conteúdo pelo navegador. |
 | `x-frame-options` | `DENY` | Evita carregamento em iframe por páginas externas. |
 | `referrer-policy` | `no-referrer` | Evita envio de URL local como referência. |
@@ -37,6 +38,7 @@ Rotas atuais cobertas pelo helper central:
 
 - Clientes web locais devem tratar esses headers como parte do comportamento esperado.
 - O backend não habilita CORS amplo por padrão.
+- A política CSP é restritiva porque a API retorna JSON e SSE, não HTML executável.
 - A API foi pensada para uso em `127.0.0.1`, não para exposição direta na internet.
 - Se um frontend local precisar rodar em outra origem, a liberação deve ser uma decisão explícita e documentada, não um padrão aberto.
 

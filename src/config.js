@@ -76,6 +76,15 @@ export function parsePort(value, fallback = 3131) {
   return parsed >= 1 && parsed <= 65535 ? parsed : fallback;
 }
 
+export function isAllowedLocalOllamaHost(hostname) {
+  const normalized = String(hostname || '').trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === 'localhost' || normalized === '::1' || normalized === '[::1]') return true;
+  if (/^127(?:\.\d{1,3}){3}$/.test(normalized)) return true;
+
+  return false;
+}
+
 export function normalizeOllamaUrl(value, fallback = DEFAULT_OLLAMA_URL) {
   const raw = typeof value === 'string' ? value.trim() : '';
   if (!raw) return fallback;
@@ -83,6 +92,8 @@ export function normalizeOllamaUrl(value, fallback = DEFAULT_OLLAMA_URL) {
   try {
     const url = new URL(raw);
     if (!['http:', 'https:'].includes(url.protocol)) return fallback;
+    if (!isAllowedLocalOllamaHost(url.hostname)) return fallback;
+
     url.username = '';
     url.password = '';
     url.hash = '';

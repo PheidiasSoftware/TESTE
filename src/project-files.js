@@ -1,5 +1,10 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
+
+function isPathInsideRoot(root, target) {
+  const relativePath = relative(root, target);
+  return Boolean(relativePath) && !relativePath.startsWith('..') && !isAbsolute(relativePath);
+}
 
 export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowedFileExtensions = [] } = {}) {
   if (!requestedPath || typeof requestedPath !== 'string') {
@@ -39,7 +44,28 @@ export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowe
     throw Object.assign(new Error(`Extensão não permitida: ${extension || 'sem extensão'}.`), { statusCode: 415 });
   }
 
-  return { absolutePath: safePath, relativePath };
+  return { absolutePath: safePath, relativePath, rootPath: safeRoot };
+}
+
+async function resolveRealFileInsideProjectRoot(safeFile) {
+  let realRoot;
+  let realFilePath;
+
+  try {
+    realRoot = await realpath(safeFile.rootPath);
+    realFilePath = await realpath(safeFile.absolutePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw Object.assign(new Error('Arquivo não encontrado.'), { statusCode: 404 });
+    }
+    throw error;
+  }
+
+  if (!isPathInsideRoot(realRoot, realFilePath)) {
+    throw Object.assign(new Error('Caminho real fora da pasta do projeto não é permitido.'), { statusCode: 403 });
+  }
+
+  return realFilePath;
 }
 
 export function truncateUtf8ToBytes(value, maxBytes) {
@@ -89,8 +115,9 @@ export async function readProjectFile({ path, projectRoot, maxBytes, allowedFile
     projectRoot,
     allowedFileExtensions
   });
+  const realFilePath = await resolveRealFileInsideProjectRoot(safeFile);
 
-  const fileStat = await stat(safeFile.absolutePath).catch(error => {
+  const fileStat = await stat(realFilePath).catch(error => {
     if (error?.code === 'ENOENT') {
       throw Object.assign(new Error('Arquivo não encontrado.'), { statusCode: 404 });
     }
@@ -109,7 +136,7 @@ export async function readProjectFile({ path, projectRoot, maxBytes, allowedFile
     path: safeFile.relativePath,
     sizeBytes: fileStat.size,
     maxFileReadBytes: maxBytes,
-    content: await readFile(safeFile.absolutePath, 'utf8')
+    content: await readFile(realFilePath, 'utf8')
   };
 }
 

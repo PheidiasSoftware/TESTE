@@ -199,74 +199,63 @@ Implementar leitura segura e limitada de arquivos textuais do próprio projeto, 
 5. Documentar integração futura com plugin/extensão VS Code.
 6. Considerar CI leve com GitHub Actions usando Node.js 20.
 
-### Próximo passo sugerido
-
-Na próxima execução segura, priorizar a integração controlada de arquivos lidos ao `/api/generate` ou criar endpoint de streaming separado, mantendo o backend leve e sem execução automática de código do usuário.
-
-## 2026-06-27 23:35 - Contexto seguro por arquivos no `/api/generate`
+## 2026-07-01 18:37 - Validação estrita de loopback do Ollama
 
 ### Avaliação inicial desta execução
 
 - Repositório analisado antes de qualquer alteração.
-- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `scripts/start-windows.ps1`, `memory.md` e `PROJECT_MEMORY.md`.
-- `README.md` já documentava backend local com Ollama, fila, cache, leitura segura de arquivos, testes, script Windows e próximos passos.
-- `package.json` continuava sem dependências externas, com Node.js 20+ e `node --test`.
-- `src/server.js` já continha leitura segura via `POST /api/read-file`, mas `/api/generate` ainda recebia apenas `context` manual.
-- `test/server.test.js` cobria leitura segura e rotas locais; ainda faltava teste específico para montagem de contexto a partir de lista de arquivos.
-- `scripts/start-windows.ps1` permanecia conservador e não executava código gerado.
-- Não foram encontrados registros claros de Claude Agent, instruções conflitantes, issues abertas ou PRs relevantes durante a análise.
+- Arquivos conferidos: `README.md`, `package.json`, `PROJECT_MEMORY.md`, `memory.md`, `src/config.js`, `src/server.js`, `test/server.test.js`, `test/config.test.js` e `docs/ollama-url-contract.md`.
+- `README.md` confirma backend Node.js nativo, sem dependências externas, com Ollama local, scripts Windows, testes offline, fila, cache, streaming SSE, leitura segura de arquivos, rate limit e documentação técnica.
+- `package.json` mantém `node --test` e scripts Windows, sem dependências pesadas.
+- `src/config.js` já restringia `HOST` e `OLLAMA_URL` para uso local, mas aceitava hosts `127.x.x.x` por regex sem validar cada octeto IPv4.
+- `src/server.js` expõe status público sanitizado, não mostra `PROJECT_ROOT` nem endpoint real do Ollama e usa logs estruturados com redaction.
+- `test/config.test.js` cobria OLLAMA_URL remoto, credenciais, query/hash e paths comuns, mas ainda não cobria IPv4 loopback malformado.
+- PRs recentes no repositório: nenhum encontrado pelo conector.
+- Não foram encontrados registros claros de Claude Agent, branches, PRs, issues ou instruções conflitantes nos arquivos consultados nesta execução.
 
 ### Decisão tomada
 
-Integrar leitura segura de arquivos ao fluxo de geração por meio do campo opcional `contextFiles`, mantendo limites rígidos de quantidade e tamanho. A melhoria torna o backend mais útil para programação real sem permitir execução automática de código do usuário.
+Executar uma melhoria pequena, segura e reversível na configuração local: aceitar apenas IPv4 loopback sintaticamente válido em `127.0.0.0/8` para `OLLAMA_URL`, evitando valores ambíguos como `127.999.999.999` que parecem locais, mas falhariam ou poderiam confundir diagnóstico no Windows.
 
 ### Arquivos alterados/criados
 
-- `src/server.js`
-  - Adicionadas variáveis `MAX_CONTEXT_FILES` e `MAX_CONTEXT_BYTES`.
-  - Criada função exportada `buildContextFromFiles()`.
-  - `POST /api/generate` agora aceita `contextFiles` como lista de caminhos relativos.
-  - O contexto final combina `context` manual com arquivos lidos de forma segura.
-  - A resposta informa `contextFiles` incluídos e `contextTruncated` quando houver corte por limite.
-  - `/health` e `/api/status` agora expõem limites de contexto por arquivo.
+- `src/config.js`
+  - Criado helper interno `isValidLoopbackIPv4()`.
+  - `isAllowedLocalOllamaHost()` passou a aceitar `127.x.x.x` somente quando todos os octetos estão entre 0 e 255 e o primeiro octeto é exatamente `127`.
 
-- `test/context-files.test.js`
-  - Criado teste de montagem de contexto com arquivos seguros em diretório temporário.
-  - Criado teste de bloqueio por excesso de arquivos.
-  - Criado teste para rejeitar itens inválidos na lista.
+- `test/ollama-url-loopback.test.js`
+  - Criado teste offline para aceitar `127.0.0.1`, `127.255.255.255` e `127.1.2.3`.
+  - Criado teste offline para rejeitar `127.256.0.1`, `127.999.999.999`, IPv4 incompleto, IPv4 longo e `0127.0.0.1`.
+  - Validado que `normalizeOllamaUrl()` e `loadConfig()` retornam o fallback seguro quando o loopback está malformado.
 
-- `README.md`
-  - Documentado `contextFiles` no `POST /api/generate`.
-  - Documentadas variáveis `MAX_CONTEXT_FILES` e `MAX_CONTEXT_BYTES`.
-  - Atualizadas seções de proteção para PC fraco, testes, decisões de arquitetura e próximos passos.
+- `docs/ollama-url-contract.md`
+  - Documentado que só são aceitos endereços IPv4 válidos em `127.0.0.0/8`.
+  - Adicionado exemplo de formato malformado que deve ser evitado.
 
 - `memory.md`
-  - Registrada esta execução com avaliação, decisão, alterações, validações, riscos, pendências e próximo passo.
+  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos, pendências e próximo passo.
 
 ### Validações executadas
 
-- Validação estática manual do fluxo de `contextFiles` antes da chamada ao Ollama.
-- Conferido que os arquivos são lidos pela mesma função segura usada em `POST /api/read-file`.
-- Conferido que a melhoria não adiciona dependências externas.
-- Conferido que o backend continua sem execução automática de código do usuário.
-- Conferido que os novos testes não chamam Ollama.
-- Não foi possível executar `npm test` diretamente pelo conector GitHub; validação final deve ser feita localmente ou por CI futuro.
+- Revisão estática manual dos arquivos alterados.
+- Conferido que a mudança é apenas de configuração/validação e não altera rotas, payloads, streaming, chamada ao Ollama ou leitura de arquivos.
+- Conferido que os novos testes são offline e usam apenas `node:test` e `node:assert/strict`.
+- Conferido que nenhuma dependência externa foi adicionada.
+- `npm test` não foi executado neste ambiente por ausência de checkout local autorizado; validação final deve ocorrer por CI ou em Windows/Node.js 20+.
 
-### Riscos e observações
+### Riscos
 
-- A montagem de contexto corta conteúdo quando `MAX_CONTEXT_BYTES` é atingido; isso é intencional para proteger PCs com 8 GB RAM.
-- `contextFiles` depende de `PROJECT_ROOT`; recomenda-se iniciar o backend na raiz do projeto ou definir `PROJECT_ROOT` explicitamente.
-- O teste novo foi criado em arquivo separado para reduzir risco de conflito com o teste existente.
-- Ainda não há CI automático para validar os testes após cada commit.
+- Usuários que configuraram `OLLAMA_URL` com IPv4 inválido agora cairão silenciosamente para `http://127.0.0.1:11434`, que é o comportamento seguro do MVP.
+- A validação mantém `localhost`, `::1` e IPv4 válido de loopback; não habilita acesso remoto ao Ollama.
+- Ainda é necessário validar a suíte completa em ambiente local/CI.
 
 ### Pendências atualizadas
 
-1. Executar `npm test` localmente em Windows/Node.js 20+.
-2. Testar `npm run start:windows` em Windows real com Ollama instalado.
-3. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
-4. Documentar integração futura com plugin/extensão VS Code.
-5. Considerar CI leve com GitHub Actions usando Node.js 20.
+1. Executar `npm test` em checkout local com Node.js 20+.
+2. Testar scripts PowerShell em Windows real com Ollama instalado.
+3. Continuar endurecimento incremental de contratos HTTP/SSE e configuração local.
+4. Avaliar documentação de integração futura com cliente local/VS Code sem CORS amplo por padrão.
 
 ### Próximo passo sugerido
 
-Na próxima execução segura, priorizar endpoint de streaming separado ou CI leve com GitHub Actions, mantendo o projeto sem dependências pesadas e com foco em PC fraco sem GPU.
+Na próxima execução segura, priorizar teste offline de `getStartupConsoleLines()` para garantir que a saída de console não exponha `PROJECT_ROOT`, `OLLAMA_URL` real ou caminhos sensíveis, mantendo a inicialização amigável para Windows.

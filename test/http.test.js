@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import test from 'node:test';
 
 import {
+  normalizeServerEventName,
   openEventStream,
   readJsonBody,
   SECURITY_HEADERS,
@@ -82,12 +83,27 @@ test('sendJson responde JSON sem cache persistente e com headers de segurança',
   assert.deepEqual(JSON.parse(response.chunks.join('')), { ok: true });
 });
 
+test('normalizeServerEventName remove quebras de linha e usa fallback seguro', () => {
+  assert.equal(normalizeServerEventName('token\nretry: 0\r'), 'tokenretry: 0');
+  assert.equal(normalizeServerEventName('\n\t'), 'message');
+  assert.equal(normalizeServerEventName(null), 'message');
+  assert.equal(normalizeServerEventName(null, 'safe'), 'safe');
+});
+
 test('sendServerEvent formata evento SSE em uma única mensagem', () => {
   const response = createMockResponse();
 
   sendServerEvent(response, 'token', { token: 'abc' });
 
   assert.equal(response.chunks.join(''), 'event: token\ndata: {"token":"abc"}\n\n');
+});
+
+test('sendServerEvent normaliza nome de evento SSE antes de escrever no stream', () => {
+  const response = createMockResponse();
+
+  sendServerEvent(response, 'token\nevent: error', { token: 'abc' });
+
+  assert.equal(response.chunks.join(''), 'event: tokenevent: error\ndata: {"token":"abc"}\n\n');
 });
 
 test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {

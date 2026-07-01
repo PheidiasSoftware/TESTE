@@ -244,7 +244,7 @@ export async function readOllamaStream(body, { onToken } = {}) {
     const finalResult = handleParsedLine(parseOllamaStreamLine(buffer));
     if (finalResult) return finalResult;
 
-    return { response: fullResponse, done: false };
+    throw createSafeUpstreamError('Streaming do Ollama terminou sem confirmação de conclusão.');
   } finally {
     if (typeof reader.releaseLock === 'function') reader.releaseLock();
   }

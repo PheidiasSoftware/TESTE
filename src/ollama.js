@@ -172,7 +172,7 @@ export function createOllamaClient({
     }
 
     if (!response.body) {
-      throw Object.assign(new Error('Runtime local não retornou corpo de streaming.'), { statusCode: 502 });
+      throw createSafeUpstreamError('Runtime local não retornou corpo de streaming.');
     }
 
     return readOllamaStream(response.body, { onToken });

@@ -108,6 +108,9 @@ test('buildOllamaGeneratePayload rejects missing model or prompt', () => {
 test('parseOllamaStreamLine parses JSONL and ignores noise', () => {
   assert.deepEqual(parseOllamaStreamLine(''), null);
   assert.deepEqual(parseOllamaStreamLine('not json'), null);
+  assert.deepEqual(parseOllamaStreamLine('null'), null);
+  assert.deepEqual(parseOllamaStreamLine('[]'), null);
+  assert.deepEqual(parseOllamaStreamLine('"texto"'), null);
 
   const parsed = parseOllamaStreamLine('{"response":"abc","done":false}');
   assert.equal(parsed.response, 'abc');

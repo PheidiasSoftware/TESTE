@@ -63,6 +63,7 @@ test('SECURITY_HEADERS define proteções HTTP leves e estáveis', () => {
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
     'cross-origin-resource-policy': 'same-origin',
+    'cross-origin-opener-policy': 'same-origin',
     'permissions-policy': 'camera=(), microphone=(), geolocation=()'
   });
 });
@@ -80,6 +81,7 @@ test('sendJson responde JSON sem cache persistente e com headers de segurança',
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
   assert.equal(response.headers['cross-origin-resource-policy'], 'same-origin');
+  assert.equal(response.headers['cross-origin-opener-policy'], 'same-origin');
   assert.equal(response.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
   assert.equal(response.headers['x-test'], '1');
   assert.equal(response.ended, true);
@@ -164,6 +166,7 @@ test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
   assert.equal(response.headers['cross-origin-resource-policy'], 'same-origin');
+  assert.equal(response.headers['cross-origin-opener-policy'], 'same-origin');
   assert.equal(response.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
   assert.equal(response.headers.connection, 'keep-alive');
 });

@@ -6,6 +6,14 @@ export const SECURITY_HEADERS = {
   'permissions-policy': 'camera=(), microphone=(), geolocation=()'
 };
 
+export function normalizeServerEventName(value, fallback = 'message') {
+  const normalized = typeof value === 'string'
+    ? value.replace(/[\u0000-\u001F\u007F]+/g, '').trim()
+    : '';
+
+  return normalized || fallback;
+}
+
 export function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
     ...SECURITY_HEADERS,
@@ -17,7 +25,7 @@ export function sendJson(response, statusCode, payload, headers = {}) {
 }
 
 export function sendServerEvent(response, event, payload) {
-  response.write(`event: ${event}\n`);
+  response.write(`event: ${normalizeServerEventName(event)}\n`);
   response.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 

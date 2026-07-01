@@ -85,6 +85,24 @@ test('sendJson responde JSON sem cache persistente e com headers de segurança',
   assert.deepEqual(JSON.parse(response.chunks.join('')), { ok: true });
 });
 
+test('sendJson não permite sobrescrever headers críticos por engano', () => {
+  const response = createMockResponse();
+
+  sendJson(response, 200, { ok: true }, {
+    'content-type': 'text/html',
+    'cache-control': 'public, max-age=3600',
+    'content-security-policy': "default-src *",
+    'x-content-type-options': 'unsafe',
+    allow: 'GET'
+  });
+
+  assert.equal(response.headers['content-type'], 'application/json; charset=utf-8');
+  assert.equal(response.headers['cache-control'], 'no-store');
+  assert.equal(response.headers['content-security-policy'], SECURITY_HEADERS['content-security-policy']);
+  assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers.allow, 'GET');
+});
+
 test('normalizeServerEventName remove caracteres fora do token seguro e usa fallback', () => {
   assert.equal(normalizeServerEventName('token\nretry: 0\r'), 'tokenretry0');
   assert.equal(normalizeServerEventName(' token.created-v1_ok '), 'token.created-v1_ok');

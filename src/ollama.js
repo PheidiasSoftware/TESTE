@@ -210,24 +210,28 @@ export async function readOllamaStream(body, { onToken } = {}) {
     return null;
   }
 
-  while (true) {
-    const chunk = await reader.read();
-    buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
-    for (const line of lines) {
-      const result = handleParsedLine(parseOllamaStreamLine(line));
-      if (result) return result;
+      for (const line of lines) {
+        const result = handleParsedLine(parseOllamaStreamLine(line));
+        if (result) return result;
+      }
+
+      if (chunk.done) break;
     }
 
-    if (chunk.done) break;
+    const finalResult = handleParsedLine(parseOllamaStreamLine(buffer));
+    if (finalResult) return finalResult;
+
+    return { response: fullResponse, done: false };
+  } finally {
+    if (typeof reader.releaseLock === 'function') reader.releaseLock();
   }
-
-  const finalResult = handleParsedLine(parseOllamaStreamLine(buffer));
-  if (finalResult) return finalResult;
-
-  return { response: fullResponse, done: false };
 }
 
 function clampInteger(value, min, max) {

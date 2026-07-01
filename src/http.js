@@ -1,3 +1,5 @@
+import { StringDecoder } from 'node:string_decoder';
+
 export const SECURITY_HEADERS = {
   'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   'x-content-type-options': 'nosniff',
@@ -108,8 +110,13 @@ function isPlainJsonObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function normalizeBodyChunk(chunk) {
+  return Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+}
+
 export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = true } = {}) {
   return new Promise((resolve, reject) => {
+    const decoder = new StringDecoder('utf8');
     let size = 0;
     let raw = '';
     let settled = false;
@@ -136,7 +143,8 @@ export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = 
 
     request.on('data', chunk => {
       if (settled) return;
-      size += chunk.length;
+      const buffer = normalizeBodyChunk(chunk);
+      size += buffer.length;
 
       if (size > maxBodyBytes) {
         fail(createPayloadTooLargeError());
@@ -144,12 +152,13 @@ export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = 
         return;
       }
 
-      raw += chunk;
+      raw += decoder.write(buffer);
     });
 
     request.on('end', () => {
       if (settled) return;
       ended = true;
+      raw += decoder.end();
 
       if (!raw.trim()) {
         finish({});

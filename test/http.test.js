@@ -63,6 +63,7 @@ test('SECURITY_HEADERS define proteções HTTP leves e estáveis', () => {
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
+    'x-robots-tag': 'noindex, nofollow, noarchive',
     'cross-origin-resource-policy': 'same-origin',
     'cross-origin-opener-policy': 'same-origin',
     'x-permitted-cross-domain-policies': 'none',
@@ -82,6 +83,7 @@ test('sendJson responde JSON sem cache persistente e com headers de segurança',
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
+  assert.equal(response.headers['x-robots-tag'], 'noindex, nofollow, noarchive');
   assert.equal(response.headers['cross-origin-resource-policy'], 'same-origin');
   assert.equal(response.headers['cross-origin-opener-policy'], 'same-origin');
   assert.equal(response.headers['x-permitted-cross-domain-policies'], 'none');
@@ -201,6 +203,7 @@ test('openEventStream configura cabeçalhos de streaming leve e seguro', () => {
   assert.equal(response.headers['x-content-type-options'], 'nosniff');
   assert.equal(response.headers['x-frame-options'], 'DENY');
   assert.equal(response.headers['referrer-policy'], 'no-referrer');
+  assert.equal(response.headers['x-robots-tag'], 'noindex, nofollow, noarchive');
   assert.equal(response.headers['cross-origin-resource-policy'], 'same-origin');
   assert.equal(response.headers['cross-origin-opener-policy'], 'same-origin');
   assert.equal(response.headers['x-permitted-cross-domain-policies'], 'none');

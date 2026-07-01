@@ -16,6 +16,7 @@ O helper HTTP central aplica os headers abaixo em respostas JSON e em streams SS
 | `x-content-type-options` | `nosniff` | Evita interpretação automática de tipo de conteúdo pelo navegador. |
 | `x-frame-options` | `DENY` | Evita carregamento em iframe por páginas externas. |
 | `referrer-policy` | `no-referrer` | Evita envio de URL local como referência. |
+| `x-robots-tag` | `noindex, nofollow, noarchive` | Reduz risco de indexação ou arquivamento se a API local for exposta por engano por túnel, proxy ou configuração incorreta. |
 | `cross-origin-resource-policy` | `same-origin` | Reduz exposição de recursos para outras origens. |
 | `cross-origin-opener-policy` | `same-origin` | Isola o contexto de navegação contra interações cross-origin indesejadas quando respostas forem abertas por navegador local. |
 | `x-permitted-cross-domain-policies` | `none` | Bloqueia políticas cross-domain legadas, mantendo o backend textual restrito ao uso local esperado. |
@@ -42,6 +43,7 @@ Rotas atuais cobertas pelo helper central:
 - O backend não habilita CORS amplo por padrão.
 - A política CSP é restritiva porque a API retorna JSON e SSE, não HTML executável.
 - A API foi pensada para uso em `127.0.0.1`, não para exposição direta na internet.
+- `x-robots-tag` é uma defesa auxiliar; não substitui manter `HOST=127.0.0.1`, firewall local e ausência de túnel público.
 - Se um frontend local precisar rodar em outra origem, a liberação deve ser uma decisão explícita e documentada, não um padrão aberto.
 
 ## Arquivo de referência

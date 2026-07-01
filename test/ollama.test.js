@@ -261,3 +261,28 @@ test('readOllamaStream parses final JSONL even without trailing newline', async 
   assert.deepEqual(tokens, ['fim']);
   assert.deepEqual(result, { response: 'fim', done: true, total_duration: 101 });
 });
+
+test('readOllamaStream releases reader lock after early done result', async () => {
+  const encoder = new TextEncoder();
+  let released = false;
+  const body = {
+    getReader() {
+      return {
+        async read() {
+          return {
+            done: false,
+            value: encoder.encode('{"response":"ok","done":true,"total_duration":10}\n')
+          };
+        },
+        releaseLock() {
+          released = true;
+        }
+      };
+    }
+  };
+
+  const result = await readOllamaStream(body);
+
+  assert.deepEqual(result, { response: 'ok', done: true, total_duration: 10 });
+  assert.equal(released, true);
+});

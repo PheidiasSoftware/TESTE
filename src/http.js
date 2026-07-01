@@ -8,12 +8,18 @@ export const SECURITY_HEADERS = {
   'permissions-policy': 'camera=(), microphone=(), geolocation=()'
 };
 
-export function normalizeServerEventName(value, fallback = 'message') {
-  const normalized = typeof value === 'string'
+function sanitizeServerEventName(value) {
+  return typeof value === 'string'
     ? value.replace(/[^A-Za-z0-9_.-]+/g, '').trim()
     : '';
+}
 
-  return normalized || fallback;
+export function normalizeServerEventName(value, fallback = 'message') {
+  const normalized = sanitizeServerEventName(value);
+  if (normalized) return normalized;
+
+  const normalizedFallback = sanitizeServerEventName(fallback);
+  return normalizedFallback || 'message';
 }
 
 export function stringifyServerEventPayload(payload) {

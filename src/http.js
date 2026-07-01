@@ -90,6 +90,20 @@ function createClientClosedError() {
   });
 }
 
+function createPayloadTooLargeError() {
+  return Object.assign(new Error('Payload muito grande.'), { statusCode: 413 });
+}
+
+function parseContentLengthHeader(value) {
+  if (value === undefined || value === null || value === '') return null;
+
+  const normalized = String(value).trim();
+  if (!/^\d+$/.test(normalized)) return null;
+
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 function isPlainJsonObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -113,12 +127,19 @@ export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = 
       resolve(value);
     }
 
+    const declaredContentLength = parseContentLengthHeader(request.headers?.['content-length']);
+    if (declaredContentLength !== null && declaredContentLength > maxBodyBytes) {
+      fail(createPayloadTooLargeError());
+      if (destroyOnLimit && typeof request.destroy === 'function') request.destroy();
+      return;
+    }
+
     request.on('data', chunk => {
       if (settled) return;
       size += chunk.length;
 
       if (size > maxBodyBytes) {
-        fail(Object.assign(new Error('Payload muito grande.'), { statusCode: 413 }));
+        fail(createPayloadTooLargeError());
         if (destroyOnLimit && typeof request.destroy === 'function') request.destroy();
         return;
       }

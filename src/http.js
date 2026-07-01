@@ -22,15 +22,35 @@ export function normalizeServerEventName(value, fallback = 'message') {
   return normalizedFallback || 'message';
 }
 
+function createSafeJsonReplacer() {
+  const seen = new WeakSet();
+
+  return (_key, value) => {
+    if (typeof value === 'bigint') return value.toString();
+    if (typeof value === 'symbol') return '[Symbol]';
+    if (typeof value === 'function') return '[Function]';
+    if (value instanceof Error) return { name: value.name, message: value.message };
+
+    if (value !== null && typeof value === 'object') {
+      if (seen.has(value)) return '[Circular]';
+      seen.add(value);
+    }
+
+    return value;
+  };
+}
+
+export function stringifyJsonPayload(payload) {
+  try {
+    return JSON.stringify(payload, createSafeJsonReplacer(), 2);
+  } catch {
+    return JSON.stringify({ error: 'Payload JSON não serializável.' }, null, 2);
+  }
+}
+
 export function stringifyServerEventPayload(payload) {
   try {
-    return JSON.stringify(payload, (_key, value) => {
-      if (typeof value === 'bigint') return value.toString();
-      if (typeof value === 'symbol') return '[Symbol]';
-      if (typeof value === 'function') return '[Function]';
-      if (value instanceof Error) return { name: value.name, message: value.message };
-      return value;
-    });
+    return JSON.stringify(payload, createSafeJsonReplacer());
   } catch {
     return JSON.stringify({ error: 'Payload SSE não serializável.' });
   }
@@ -43,7 +63,7 @@ export function sendJson(response, statusCode, payload, headers = {}) {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store'
   });
-  response.end(JSON.stringify(payload, null, 2));
+  response.end(stringifyJsonPayload(payload));
 }
 
 export function sendServerEvent(response, event, payload) {

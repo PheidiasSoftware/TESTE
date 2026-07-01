@@ -136,6 +136,15 @@ test('readJsonBody retorna erro 400 para JSON inválido', async () => {
   );
 });
 
+test('readJsonBody rejeita JSON que não seja objeto', async () => {
+  for (const payload of ['[]', 'null', 'true', '123', '"texto"']) {
+    await assert.rejects(
+      () => readJsonBody(createMockRequest([payload])),
+      error => error.statusCode === 400 && /objeto/.test(error.message)
+    );
+  }
+});
+
 test('readJsonBody retorna 499 quando cliente encerra antes do corpo completo', async () => {
   await assert.rejects(
     () => readJsonBody(createAbortedMockRequest()),

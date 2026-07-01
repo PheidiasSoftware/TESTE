@@ -272,7 +272,7 @@ async function buildGenerateRequestPayload(request, requestId) {
   }
 
   const contextBundle = await buildContextFromFiles({
-    context: typeof body.context === 'string' ? body.context.slice(0, MAX_CONTEXT_BYTES) : '',
+    context: typeof body.context === 'string' ? body.context : '',
     contextFiles: body.contextFiles,
     projectRoot: PROJECT_ROOT,
     maxFiles: MAX_CONTEXT_FILES,

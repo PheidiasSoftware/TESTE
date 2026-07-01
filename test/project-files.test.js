@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -75,6 +75,40 @@ test('readProjectFile lê arquivo pequeno e bloqueia arquivo acima do limite', a
     );
   } finally {
     await rm(projectRoot, { recursive: true, force: true });
+  }
+});
+
+test('readProjectFile bloqueia symlink que resolve para fora da raiz do projeto', async t => {
+  const projectRoot = await mkdtemp(join(tmpdir(), 'teste-project-symlink-root-'));
+  const outsideRoot = await mkdtemp(join(tmpdir(), 'teste-project-symlink-outside-'));
+
+  try {
+    const outsideFile = join(outsideRoot, 'secret.md');
+    await writeFile(outsideFile, 'segredo fora do projeto', 'utf8');
+
+    try {
+      await symlink(outsideFile, join(projectRoot, 'linked-secret.md'), 'file');
+    } catch (error) {
+      if (error?.code === 'EPERM' || error?.code === 'EACCES' || error?.code === 'ENOTSUP') {
+        t.skip('Sistema atual não permite criar symlink de arquivo para este teste.');
+        return;
+      }
+
+      throw error;
+    }
+
+    await assert.rejects(
+      () => readProjectFile({
+        path: 'linked-secret.md',
+        projectRoot,
+        maxBytes: 1024,
+        allowedFileExtensions: ['.md']
+      }),
+      error => error.statusCode === 403 && /Caminho real fora/.test(error.message)
+    );
+  } finally {
+    await rm(projectRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
   }
 });
 

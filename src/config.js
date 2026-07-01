@@ -76,11 +76,23 @@ export function parsePort(value, fallback = 3131) {
   return parsed >= 1 && parsed <= 65535 ? parsed : fallback;
 }
 
+function isValidLoopbackIPv4(hostname) {
+  const parts = String(hostname || '').trim().split('.');
+  if (parts.length !== 4) return false;
+  if (parts[0] !== '127') return false;
+
+  return parts.every(part => {
+    if (!/^\d{1,3}$/.test(part)) return false;
+    const octet = Number(part);
+    return Number.isInteger(octet) && octet >= 0 && octet <= 255;
+  });
+}
+
 export function isAllowedLocalOllamaHost(hostname) {
   const normalized = String(hostname || '').trim().toLowerCase();
   if (!normalized) return false;
   if (normalized === 'localhost' || normalized === '::1' || normalized === '[::1]') return true;
-  if (/^127(?:\.\d{1,3}){3}$/.test(normalized)) return true;
+  if (isValidLoopbackIPv4(normalized)) return true;
 
   return false;
 }

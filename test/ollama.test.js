@@ -160,3 +160,20 @@ test('readOllamaStream aggregates tokens and notifies caller', async () => {
   assert.deepEqual(tokens, ['ol', 'á']);
   assert.deepEqual(result, { response: 'olá', done: true, total_duration: 99 });
 });
+
+test('readOllamaStream parses final JSONL even without trailing newline', async () => {
+  const encoder = new TextEncoder();
+  const tokens = [];
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode('{"response":"fim","done":false}\n'));
+      controller.enqueue(encoder.encode('{"done":true,"total_duration":101}'));
+      controller.close();
+    }
+  });
+
+  const result = await readOllamaStream(stream, { onToken: token => tokens.push(token) });
+
+  assert.deepEqual(tokens, ['fim']);
+  assert.deepEqual(result, { response: 'fim', done: true, total_duration: 101 });
+});

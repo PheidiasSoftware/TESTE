@@ -94,6 +94,8 @@ export function parseOllamaStreamLine(line) {
 
   try {
     const parsed = JSON.parse(trimmed);
+    if (!isPlainObject(parsed)) return null;
+
     return {
       response: typeof parsed.response === 'string' ? parsed.response : '',
       done: Boolean(parsed.done),

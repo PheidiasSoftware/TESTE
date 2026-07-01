@@ -9,6 +9,7 @@ import {
   SECURITY_HEADERS,
   sendJson,
   sendServerEvent,
+  stringifyJsonPayload,
   stringifyServerEventPayload
 } from '../src/http.js';
 
@@ -106,6 +107,32 @@ test('sendJson não permite sobrescrever headers críticos por engano', () => {
   assert.equal(response.headers.allow, 'GET');
 });
 
+test('stringifyJsonPayload serializa BigInt, Error e objeto circular sem quebrar JSON', () => {
+  const payload = { id: 1n, error: new Error('falha') };
+  payload.self = payload;
+
+  assert.deepEqual(JSON.parse(stringifyJsonPayload(payload)), {
+    id: '1',
+    error: { name: 'Error', message: 'falha' },
+    self: '[Circular]'
+  });
+});
+
+test('sendJson responde payload não serializável com fallback seguro', () => {
+  const response = createMockResponse();
+  const payload = { id: 1n };
+  payload.self = payload;
+
+  sendJson(response, 200, payload);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.ended, true);
+  assert.deepEqual(JSON.parse(response.chunks.join('')), {
+    id: '1',
+    self: '[Circular]'
+  });
+});
+
 test('normalizeServerEventName remove caracteres fora do token seguro e usa fallback', () => {
   assert.equal(normalizeServerEventName('token\nretry: 0\r'), 'tokenretry0');
   assert.equal(normalizeServerEventName(' token.created-v1_ok '), 'token.created-v1_ok');
@@ -127,11 +154,11 @@ test('stringifyServerEventPayload serializa valores não JSON sem quebrar SSE', 
   );
 });
 
-test('stringifyServerEventPayload usa fallback seguro para payload circular', () => {
+test('stringifyServerEventPayload usa marcador seguro para payload circular', () => {
   const payload = { ok: true };
   payload.self = payload;
 
-  assert.equal(stringifyServerEventPayload(payload), '{"error":"Payload SSE não serializável."}');
+  assert.equal(stringifyServerEventPayload(payload), '{"ok":true,"self":"[Circular]"}');
 });
 
 test('sendServerEvent formata evento SSE em uma única mensagem', () => {

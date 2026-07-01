@@ -123,6 +123,7 @@ A CI não instala Ollama, não baixa modelos e não chama `/api/generate` com ta
 - [Integração de clientes locais](docs/client-integration.md)
 - [Validação local do backend](docs/local-validation.md)
 - [Ajuste seguro do Ollama para PC fraco](docs/ollama-runtime-tuning.md)
+- [Contrato seguro de OLLAMA_URL](docs/ollama-url-contract.md)
 - [Smoke tests HTTP offline da API](docs/api-smoke-tests.md)
 - [Headers de segurança da API](docs/security-headers.md)
 

@@ -56,7 +56,7 @@ test('normalizeHost keeps the backend bound to local interfaces by default', () 
   assert.equal(normalizeHost('127.0.0.1'), '127.0.0.1');
   assert.equal(normalizeHost(' localhost '), 'localhost');
   assert.equal(normalizeHost('::1'), '::1');
-  assert.equal(normalizeHost('[::1]'), '[::1]');
+  assert.equal(normalizeHost('[::1]'), '::1');
   assert.equal(normalizeHost('0.0.0.0'), '127.0.0.1');
   assert.equal(normalizeHost('192.168.0.10'), '127.0.0.1');
   assert.equal(normalizeHost(''), '127.0.0.1');
@@ -64,6 +64,7 @@ test('normalizeHost keeps the backend bound to local interfaces by default', () 
 
 test('loadConfig falls back to loopback when HOST asks for public binding', () => {
   assert.equal(loadConfig({ HOST: 'localhost' }).HOST, 'localhost');
+  assert.equal(loadConfig({ HOST: '[::1]' }).HOST, '::1');
   assert.equal(loadConfig({ HOST: '0.0.0.0' }).HOST, '127.0.0.1');
   assert.equal(loadConfig({ HOST: '::' }).HOST, '127.0.0.1');
 });

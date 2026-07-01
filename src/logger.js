@@ -7,9 +7,36 @@ const MAX_LOG_STRING_LENGTH = 300;
 const MAX_LOG_ARRAY_ITEMS = 20;
 const MAX_LOG_DEPTH = 5;
 
+function normalizeNonJsonValue(value) {
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'symbol') return value.toString();
+  if (typeof value === 'function') return `[function ${value.name || 'anonymous'}]`;
+
+  return value;
+}
+
+function normalizeErrorForLog(error, depth) {
+  const safeError = {
+    name: error.name,
+    message: error.message
+  };
+
+  if (error.code) safeError.code = error.code;
+  if (error.statusCode) safeError.statusCode = error.statusCode;
+  if (error.cause && depth < MAX_LOG_DEPTH) safeError.cause = redactForLog(error.cause, depth + 1);
+
+  return safeError;
+}
+
 export function redactForLog(value, depth = 0) {
   if (depth > MAX_LOG_DEPTH) return '[max-depth]';
   if (value === null || value === undefined) return value;
+
+  const normalizedValue = normalizeNonJsonValue(value);
+  if (normalizedValue !== value) return normalizedValue;
+
+  if (value instanceof Error) return normalizeErrorForLog(value, depth);
+
   if (typeof value === 'string') {
     return value.length > MAX_LOG_STRING_LENGTH
       ? `${value.slice(0, MAX_LOG_STRING_LENGTH)}...`

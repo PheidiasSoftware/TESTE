@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   buildContextFromFiles,
+  MAX_CONTEXT_FILE_PATH_CHARS,
   normalizeManualContext,
   readProjectFile,
   truncateUtf8ToBytes,
@@ -175,6 +176,15 @@ test('buildContextFromFiles valida contextFiles não-array antes do limite de qu
   await assert.rejects(
     () => buildContextFromFiles({ contextFiles: 'src/index.js', maxFiles: 1 }),
     error => error.statusCode === 400 && /lista de caminhos relativos/.test(error.message)
+  );
+});
+
+test('buildContextFromFiles rejeita caminho de contexto longo em vez de truncar silenciosamente', async () => {
+  const oversizedPath = `${'a'.repeat(MAX_CONTEXT_FILE_PATH_CHARS + 1)}.md`;
+
+  await assert.rejects(
+    () => buildContextFromFiles({ contextFiles: [oversizedPath], maxFiles: 1 }),
+    error => error.statusCode === 400 && /contextFiles aceita no máximo 500 caracteres/.test(error.message)
   );
 });
 

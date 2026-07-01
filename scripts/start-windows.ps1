@@ -30,6 +30,24 @@ function Assert-CommandAvailable {
   }
 }
 
+function Get-RedactedUrl {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$RawUrl
+  )
+
+  try {
+    $builder = [System.UriBuilder]::new($RawUrl)
+    $builder.UserName = ""
+    $builder.Password = ""
+    $builder.Query = ""
+    $builder.Fragment = ""
+    return $builder.Uri.AbsoluteUri.TrimEnd('/')
+  } catch {
+    return "invalid-url"
+  }
+}
+
 if (-not (Test-Path -Path "package.json" -PathType Leaf)) {
   throw "package.json not found. Run this script from the repository root."
 }
@@ -70,11 +88,13 @@ if (-not $env:RATE_LIMIT_MAX_CLIENTS) { $env:RATE_LIMIT_MAX_CLIENTS = "500" }
 if (-not $env:TRUST_PROXY) { $env:TRUST_PROXY = "false" }
 if (-not $env:LOG_LEVEL) { $env:LOG_LEVEL = "info" }
 
+$DisplayOllamaUrl = Get-RedactedUrl -RawUrl $env:OLLAMA_URL
+
 Write-Host "TESTE Local Code LLM Backend" -ForegroundColor Cyan
 Write-Host "Node.js: $NodeVersionRaw"
 Write-Host "Host: $env:HOST"
 Write-Host "Port: $env:PORT"
-Write-Host "Ollama URL: $env:OLLAMA_URL"
+Write-Host "Ollama URL: $DisplayOllamaUrl"
 Write-Host "Model: $env:MODEL"
 Write-Host "Max body bytes: $env:MAX_BODY_BYTES"
 Write-Host "Request timeout ms: $env:REQUEST_TIMEOUT_MS"
@@ -94,7 +114,7 @@ try {
   Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 3 | Out-Null
   Write-Host "Ollama is reachable." -ForegroundColor Green
 } catch {
-  Write-Warning "Ollama did not respond at $env:OLLAMA_URL. Start Ollama before using /api/generate."
+  Write-Warning "Ollama did not respond at $DisplayOllamaUrl. Start Ollama before using /api/generate."
   Write-Host "Suggested model install: ollama pull $env:MODEL"
 }
 

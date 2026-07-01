@@ -118,200 +118,64 @@ Executar uma melhoria pequena, segura e reversível: adicionar testes de rotas H
 3. Implementar cache simples por hash de prompt para economizar CPU em perguntas repetidas.
 4. Criar leitura segura de arquivos do projeto com allowlist, limite de tamanho e bloqueio de caminhos perigosos.
 5. Criar scripts Windows para instalação/execução do Ollama e backend.
-6. Documentar integração futura com plugin/extensão VS Code.
-7. Considerar CI leve com GitHub Actions usando Node.js 20 quando o repositório estiver pronto para validação automática.
 
-### Próximo passo sugerido
-
-Na próxima execução segura, priorizar cache simples por hash de prompt ou scripts Windows de inicialização, mantendo a regra de não adicionar dependências pesadas e de proteger PC com 8 GB RAM sem GPU.
-
-## 2026-06-27 20:37 - Cache leve por hash de prompt
+## 2026-07-01 20:37 - Endurecimento de OLLAMA_URL contra hosts ambíguos
 
 ### Avaliação inicial
 
 - Repositório analisado antes de qualquer alteração.
-- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `memory.md` e `PROJECT_MEMORY.md`.
-- `README.md` documentava backend local com Ollama, fila, testes, endpoints e indicava cache como próximo passo.
-- `package.json` continuava sem dependências externas, com `node --test`.
-- `src/server.js` possuía servidor HTTP nativo, fila de geração, timeout, limite de payload, prompt técnico e rotas `/health`, `/api/status`, `/api/generate`.
-- `test/server.test.js` já cobria prompt, fila e rotas HTTP locais sem chamar Ollama.
-- `PROJECT_MEMORY.md` indicava como próximo passo seguro implementar cache simples por hash de prompt ou scripts Windows.
-- Não foram encontrados registros claros de Claude Agent, branches, issues, PRs ou instruções conflitantes nos arquivos analisados nesta execução.
+- Arquivos conferidos: `README.md`, `package.json`, `PROJECT_MEMORY.md`, `memory.md`, `src/config.js`, `src/http.js`, `test/config.test.js` e `docs/ollama-url-contract.md`.
+- `README.md` indica backend Node.js 20+ sem dependências externas, adequado para Windows, 8 GB RAM e sem GPU, com Ollama local, fila, cache, leitura segura, rate limit, streaming, smoke tests e documentação técnica.
+- `package.json` segue sem dependências externas e usa `node --test`.
+- `src/config.js` já normalizava `OLLAMA_URL` para loopback local, removendo credenciais, query, hash e path.
+- `test/config.test.js` já cobria defaults conservadores, limites numéricos, host local, modelo, logs, flags booleanas e normalização de `OLLAMA_URL`.
+- `docs/ollama-url-contract.md` documentava a política de aceitar apenas loopback local e raiz do runtime.
+- Busca de PRs recentes retornou lista vazia; não havia PR ativo a considerar nesta execução.
+- Não foram encontrados registros acionáveis de Claude Agent ou instruções conflitantes nos arquivos lidos nesta execução.
 
 ### Decisão tomada
 
-Implementar cache em memória pequeno e reversível por hash SHA-256 do prompt final. A melhoria reduz chamadas repetidas ao Ollama, economizando CPU em PC fraco, sem adicionar dependências externas e sem persistir dados em disco.
+Executar melhoria pequena, segura e reversível no contrato de `OLLAMA_URL`: validar também o host bruto informado pelo usuário antes do `new URL()` normalizar formatos IPv4 ambíguos. Isso evita aceitar indiretamente aliases como `127.1`, inteiro IPv4, hexadecimal ou octal, preservando o comportamento seguro de fallback para `http://127.0.0.1:11434`.
 
 ### Arquivos alterados
 
-- `src/server.js`
-  - Adicionado `createPromptCache()` exportado para testes.
-  - Adicionadas variáveis `ENABLE_PROMPT_CACHE` e `MAX_CACHE_ENTRIES`.
-  - Criado cache em memória com política simples de remoção do item mais antigo quando passa do limite.
-  - `POST /api/generate` agora verifica cache antes de entrar na fila e grava respostas bem-sucedidas após chamada ao Ollama.
-  - Respostas de geração passaram a incluir `cached`, `cacheKey` e métricas de cache.
-  - `GET /health` e `GET /api/status` passaram a retornar estado do cache.
+- `src/config.js`
+  - Criado helper interno `getRawUrlHost()` para extrair o host textual original da URL antes da normalização do parser.
+  - `normalizeOllamaUrl()` agora exige que o host bruto e o hostname já parseado sejam loopback permitido.
+  - Mantido suporte a `localhost`, IPv4 completo em `127.0.0.0/8` e IPv6 loopback `::1`.
 
-- `test/server.test.js`
-  - Importado `createPromptCache()`.
-  - Criado teste de reaproveitamento por hash e limite de entradas.
-  - Ajustados testes de `/health` e `/api/status` para validar métricas de cache.
+- `test/config.test.js`
+  - Adicionado teste offline para rejeitar `http://127.1:11434`, `http://2130706433:11434`, `http://0x7f000001:11434` e `http://0177.0.0.1:11434`.
+  - Teste não chama Ollama e não exige GPU/modelo.
 
-- `README.md`
-  - Documentadas as variáveis `ENABLE_PROMPT_CACHE` e `MAX_CACHE_ENTRIES`.
-  - Explicado o comportamento de `cached: true` em `/api/generate`.
-  - Atualizadas seções de proteção para PC fraco, decisões de arquitetura e próximos passos.
-
-### Validações executadas
-
-- Validação estática manual do fluxo de cache antes da fila.
-- Conferido que o cache usa apenas módulos nativos do Node.js (`node:crypto`) e não adiciona dependências.
-- Conferido que falhas do Ollama não são gravadas em cache.
-- Conferido que o cache é limitado por número de entradas para evitar crescimento ilimitado de memória.
-- Não foi possível executar `npm test` diretamente pelo conector GitHub; validação final deve ser feita localmente ou por CI futuro.
-
-### Riscos
-
-- O cache é em memória e reinicia junto com o processo, o que é intencional para manter o MVP simples.
-- O cache considera o prompt final completo; pequenas diferenças em `task`, `language` ou `context` geram chaves diferentes.
-- Como as respostas ficam em memória, o limite `MAX_CACHE_ENTRIES` deve permanecer baixo em PC com 8 GB RAM.
-- Ainda não há CI automático para validar os testes após cada commit.
-
-### Pendências atualizadas
-
-1. Executar `npm test` localmente em Windows/Node.js 20+.
-2. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
-3. Criar leitura segura de arquivos do projeto com allowlist, limite de tamanho e bloqueio de caminhos perigosos.
-4. Criar scripts Windows para instalação/execução do Ollama e backend.
-5. Documentar integração futura com plugin/extensão VS Code.
-6. Considerar CI leve com GitHub Actions usando Node.js 20 quando o repositório estiver pronto para validação automática.
-
-### Próximo passo sugerido
-
-Na próxima execução segura, priorizar scripts Windows de inicialização ou leitura segura de arquivos do projeto, mantendo o backend leve, local e sem execução automática de código do usuário.
-
-## 2026-06-27 21:36 - Script Windows de inicialização conservadora
-
-### Avaliação inicial
-
-- Repositório analisado antes de qualquer alteração.
-- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `memory.md` e `PROJECT_MEMORY.md`.
-- `README.md` documentava backend local com Ollama, fila, cache, testes, endpoints e indicava scripts Windows como próximo passo.
-- `package.json` continuava sem dependências externas e com scripts `start`, `dev` e `test`.
-- `src/server.js` já possuía HTTP nativo, fila conservadora, cache em memória, limite de payload, timeout, rotas de saúde/status e geração via Ollama.
-- `test/server.test.js` cobria prompt, fila, cache e rotas HTTP locais sem chamar Ollama.
-- `memory.md` contém o histórico inicial e `PROJECT_MEMORY.md` contém o histórico complementar das últimas execuções.
-- Busca textual no repositório não retornou índice útil para Claude Agent; nos arquivos lidos não havia instruções, estado ou conflitos do Claude Agent.
-- Busca de issues abertas para backend/LLM/Ollama/Claude/memory não retornou resultados.
-- Busca de PRs recentes no repositório não retornou resultados.
-
-### Decisão tomada
-
-Executar uma melhoria pequena, segura e reversível: adicionar um script PowerShell para Windows que inicializa o backend com padrões conservadores para 8 GB RAM sem GPU e verifica se o Ollama está respondendo antes do uso efetivo de `/api/generate`.
-
-### Arquivos alterados/criados
-
-- `scripts/start-windows.ps1`
-  - Criado helper PowerShell para rodar a partir da raiz do repositório.
-  - Define padrões seguros apenas quando variáveis não foram informadas: `GENERATION_CONCURRENCY=1`, `MAX_QUEUE_SIZE=4`, `ENABLE_PROMPT_CACHE=true`, `MAX_CACHE_ENTRIES=20`.
-  - Exibe configuração efetiva de host, porta, Ollama, modelo, fila e cache.
-  - Verifica `OLLAMA_URL/api/tags` com timeout curto e orienta `ollama pull` se o Ollama não responder.
-  - Inicia `node src/server.js` sem executar código gerado pelo modelo.
-
-- `package.json`
-  - Adicionado script `start:windows` para chamar o helper PowerShell.
-  - Mantido projeto sem dependências externas.
-
-- `README.md`
-  - Adicionada seção `Como rodar no Windows`.
-  - Documentado uso de `npm run start:windows` e execução direta do script.
-  - Atualizadas decisões de arquitetura e próximos passos.
+- `docs/ollama-url-contract.md`
+  - Documentado que IPv4 aceito deve estar em formato decimal completo com quatro octetos.
+  - Adicionados exemplos de formatos ambíguos a evitar.
+  - Checklist atualizado para preferir `127.0.0.1` e evitar IPv4 abreviado, inteiro, hexadecimal ou octal.
 
 - `PROJECT_MEMORY.md`
-  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos e pendências.
+  - Registrada esta execução.
 
 ### Validações executadas
 
-- Validação estática manual do script PowerShell.
-- Conferido que o script não instala pacotes, não baixa modelos automaticamente e não executa código de usuário.
-- Conferido que as configurações conservadoras só são aplicadas quando variáveis de ambiente não existem, preservando customização do usuário.
-- Conferido que `package.json` permanece sem dependências externas.
-- Não foi possível executar `npm test` ou o PowerShell pelo conector GitHub; validação final deve ser feita localmente no Windows com Node.js 20+.
+- Revisão estática manual das alterações.
+- Conferido que a alteração usa apenas JavaScript nativo e não adiciona dependências.
+- Conferido que a alteração não executa código de usuário e não altera endpoints públicos.
+- Conferido que o fallback seguro continua sendo `http://127.0.0.1:11434`.
+- `npm test` não foi executado neste ambiente porque a execução foi feita pelo conector GitHub, sem checkout local.
 
 ### Riscos
 
-- A execução via `npm run start:windows` depende de PowerShell disponível no Windows.
-- `ExecutionPolicy Bypass` é usado somente para este processo, para facilitar execução local do script do próprio repositório.
-- A checagem do Ollama é apenas informativa; o backend ainda inicia mesmo se o Ollama não estiver respondendo, permitindo usar `/health` e `/api/status`.
-- Ainda não há CI automático para validar os testes após cada commit.
+- Ambientes que configuravam `OLLAMA_URL` com aliases ambíguos como `127.1` agora cairão para `127.0.0.1`, intencionalmente mais seguro para o MVP.
+- O helper de host bruto é simples e voltado para URLs HTTP/HTTPS normais; entradas fora desse padrão já caem no fallback seguro.
 
 ### Pendências atualizadas
 
-1. Executar `npm test` localmente em Windows/Node.js 20+.
-2. Testar `npm run start:windows` em Windows real com Ollama instalado.
-3. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
-4. Criar leitura segura de arquivos do projeto com allowlist, limite de tamanho e bloqueio de caminhos perigosos.
-5. Documentar integração futura com plugin/extensão VS Code.
-6. Considerar CI leve com GitHub Actions usando Node.js 20 quando o repositório estiver pronto para validação automática.
+1. Executar `npm test` localmente ou pela CI em Node.js 20+.
+2. Testar `npm run smoke:windows` em Windows real com Ollama instalado.
+3. Continuar melhorando testes de segurança e documentação sem adicionar dependências pesadas.
+4. Em uma execução futura, revisar se o MVP backend já atende aos critérios mínimos e registrar status final em `docs/backend-mvp-status.md`.
 
 ### Próximo passo sugerido
 
-Na próxima execução segura, priorizar leitura segura de arquivos do projeto com allowlist e limite de tamanho, pois isso aproxima o backend de um assistente útil para programação sem permitir execução automática insegura de código.
-
-## 2026-07-01 15:38 - Header anti-indexação para API local
-
-### Avaliação inicial
-
-- Repositório analisado antes de qualquer alteração.
-- Arquivos conferidos nesta execução: `README.md`, `package.json`, `memory.md`, `PROJECT_MEMORY.md`, `src/http.js`, `src/server.js`, `test/http.test.js`, `test/server.test.js` e `docs/security-headers.md`.
-- `README.md` confirma backend Node.js nativo, sem dependências externas, com Ollama local, scripts Windows, testes offline, rotas de geração, streaming, leitura segura de arquivos, cache, rate limit e documentação técnica.
-- `package.json` segue leve, usando `node --test` e scripts PowerShell para Windows, sem dependências pesadas.
-- `src/http.js` centraliza headers de segurança, JSON seguro, SSE e leitura de corpo com limite.
-- `src/server.js` mantém rotas locais, rate limit, sanitização de status público e logs estruturados.
-- `test/http.test.js` e `test/server.test.js` cobrem contratos offline sem chamar Ollama.
-- PRs recentes no repositório: nenhum encontrado pelo conector.
-- Não foram encontrados registros claros de Claude Agent, branches, PRs, issues ou instruções conflitantes nos arquivos e buscas consultados nesta execução.
-
-### Decisão tomada
-
-Executar uma melhoria pequena, segura e reversível no contrato HTTP: adicionar `X-Robots-Tag: noindex, nofollow, noarchive` às respostas JSON e SSE pelo helper central. A medida reduz o risco de indexação/arquivamento caso a API local seja exposta por engano por proxy, túnel ou configuração incorreta, sem custo relevante de CPU/RAM e sem dependências externas.
-
-### Arquivos alterados/criados
-
-- `src/http.js`
-  - Adicionado `x-robots-tag` em `SECURITY_HEADERS`, aplicado automaticamente por `sendJson()` e `openEventStream()`.
-
-- `test/http.test.js`
-  - Atualizado contrato de `SECURITY_HEADERS`.
-  - Adicionadas validações de `x-robots-tag` em respostas JSON e SSE.
-
-- `docs/security-headers.md`
-  - Documentado o novo header, objetivo e observação de que ele é defesa auxiliar, não substitui manter `HOST=127.0.0.1` e evitar exposição pública.
-
-- `PROJECT_MEMORY.md`
-  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos, pendências e próximo passo.
-
-### Validações executadas
-
-- Revisão estática manual dos arquivos alterados.
-- Conferido que a mudança fica centralizada em `src/http.js` e afeta JSON/SSE sem alterar payloads, rotas ou chamadas ao Ollama.
-- Conferido que os testes atualizados permanecem offline e usam apenas recursos nativos do Node.js.
-- Conferido que nenhuma dependência externa foi adicionada.
-- Não foi possível executar `npm test` neste ambiente porque não há checkout local autorizado para execução; validação final deve ocorrer por CI ou em Windows/Node.js 20+.
-
-### Riscos
-
-- `X-Robots-Tag` depende de clientes/crawlers respeitarem o header; é uma defesa em profundidade, não controle de acesso.
-- O backend continua devendo ser usado localmente, preferencialmente em `127.0.0.1`, sem túnel público.
-- Como não houve execução de testes nesta automação, ainda é necessário validar `npm test` em ambiente local/CI.
-
-### Pendências atualizadas
-
-1. Executar `npm test` em checkout local com Node.js 20+.
-2. Testar scripts PowerShell em Windows real com Ollama instalado.
-3. Continuar endurecimento incremental de contratos HTTP/SSE e validação offline.
-4. Avaliar documentação de integração futura com cliente local/VS Code sem CORS amplo por padrão.
-
-### Próximo passo sugerido
-
-Na próxima execução segura, priorizar um teste offline de headers nas rotas reais (`/health`, `/api/status`, 404 e 405) ou documentação de integração local para clientes Node.js/Flutter sem expor a API fora de `127.0.0.1`.
+Na próxima execução segura, priorizar uma revisão de prontidão do MVP ou um teste offline pequeno que ainda reduza risco de configuração, mantendo o backend leve e compatível com PC fraco.

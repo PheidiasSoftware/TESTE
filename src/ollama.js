@@ -122,7 +122,11 @@ export function createOllamaClient({
       throw createSafeUpstreamError('Falha ao chamar Ollama.', { detail });
     }
 
-    return response.json();
+    try {
+      return await response.json();
+    } catch {
+      throw createSafeUpstreamError('Resposta inválida do Ollama.');
+    }
   }
 
   async function generateStream(prompt, { signal, options = {}, onToken } = {}) {

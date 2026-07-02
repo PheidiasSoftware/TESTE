@@ -51,7 +51,7 @@ Executar uma melhoria incremental e reversível: exportar funções puras do bac
 ### Pendências atualizadas
 
 1. Executar `npm test` localmente em Windows/Node.js 20+.
-2. Expandir testes para rotas HTTP locais sem depender do Ollama.
+2. Expandir testes para rotas HTTP locais sem Ollama.
 3. Adicionar endpoint de streaming em rota separada.
 4. Implementar cache simples por hash de prompt.
 5. Criar leitura segura de arquivos do projeto com limites e allowlist.
@@ -179,3 +179,60 @@ Executar melhoria pequena, segura e reversível no contrato de `OLLAMA_URL`: val
 ### Próximo passo sugerido
 
 Na próxima execução segura, priorizar uma revisão de prontidão do MVP ou um teste offline pequeno que ainda reduza risco de configuração, mantendo o backend leve e compatível com PC fraco.
+
+## 2026-07-01 21:36 - Limite defensivo para nomes de eventos SSE
+
+### Avaliação inicial
+
+- Repositório analisado antes de qualquer alteração.
+- Arquivos conferidos: `README.md`, `package.json`, `PROJECT_MEMORY.md`, `docs/backend-mvp-status.md`, `docs/streaming.md`, `src/http.js`, `test/http.test.js` e `test/config.test.js`.
+- `README.md` documenta backend Node.js 20+ sem dependências externas, com Ollama local, fila conservadora, cache, leitura segura, rate limit, streaming SSE, scripts Windows e testes offline.
+- `package.json` continua sem dependências externas e usa `node --test`.
+- `src/http.js` já possuía normalização de nomes de eventos SSE contra caracteres de controle e injeção de linhas, mas não limitava comprimento máximo do nome.
+- `test/http.test.js` já cobria headers de segurança, serialização segura, SSE, UTF-8, payload grande, JSON inválido e cliente abortado.
+- PRs recentes e issues abertas foram consultados e não retornaram resultados.
+- Não foram encontrados registros acionáveis de Claude Agent ou instruções conflitantes nos arquivos lidos nesta execução.
+
+### Decisão tomada
+
+Executar melhoria pequena, segura e reversível no helper HTTP/SSE: limitar nomes de eventos SSE a 64 caracteres após sanitização. Isso mantém a saída do stream previsível, reduz risco de eventos anômalos e não altera os eventos reais usados pela API (`metadata`, `token`, `done`, `error`).
+
+### Arquivos alterados
+
+- `src/http.js`
+  - Adicionada constante `MAX_SERVER_EVENT_NAME_LENGTH = 64`.
+  - `sanitizeServerEventName()` agora corta nomes de eventos sanitizados para 64 caracteres.
+
+- `test/http.test.js`
+  - Adicionados testes offline para validar limite em `normalizeServerEventName()`.
+  - Adicionado teste offline para validar que `sendServerEvent()` escreve o nome já limitado no stream.
+
+- `docs/streaming.md`
+  - Documentado que nomes SSE são normalizados e limitados a 64 caracteres.
+
+- `PROJECT_MEMORY.md`
+  - Registrada esta execução.
+
+### Validações executadas
+
+- Revisão estática manual das alterações.
+- Conferido que a alteração usa apenas JavaScript nativo e não adiciona dependências.
+- Conferido que os eventos reais da API são curtos e não são afetados pelo limite.
+- Conferido que os novos testes não chamam Ollama, não baixam modelos e não exigem GPU.
+- `npm test` não foi executado neste ambiente porque a execução foi feita pelo conector GitHub, sem checkout local.
+
+### Riscos
+
+- Clientes que dependessem de nomes SSE customizados acima de 64 caracteres receberiam nomes truncados. O backend do MVP usa apenas nomes fixos curtos, então o risco prático é baixo.
+- Como não houve checkout local, a validação final ainda depende de `npm test`, `npm run test:windows` ou CI verde.
+
+### Pendências atualizadas
+
+1. Executar `npm test` localmente ou pela CI em Node.js 20+.
+2. Testar `npm run smoke:windows` em Windows real com Ollama instalado.
+3. Evitar funcionalidades grandes até haver evidência objetiva de testes passando no commit mais recente.
+4. Revisar e registrar critérios finais do MVP backend quando houver validação objetiva dos testes.
+
+### Próximo passo sugerido
+
+Na próxima execução segura, priorizar confirmação de checks/CI ou revisão final de prontidão do MVP, sem adicionar dependências pesadas nem refatorações grandes.

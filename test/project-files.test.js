@@ -42,6 +42,16 @@ test('validateSafeProjectFilePath rejeita espaços no início ou fim do caminho'
   );
 });
 
+test('validateSafeProjectFilePath rejeita caminho acima do limite antes de resolver o path', () => {
+  const projectRoot = join(tmpdir(), 'projeto-teste');
+  const oversizedPath = `${'a'.repeat(MAX_CONTEXT_FILE_PATH_CHARS + 1)}.md`;
+
+  assert.throws(
+    () => validateSafeProjectFilePath({ requestedPath: oversizedPath, projectRoot, allowedFileExtensions: ['.md'] }),
+    error => error.statusCode === 400 && /Caminho aceita no máximo 500 caracteres/.test(error.message)
+  );
+});
+
 test('validateSafeProjectFilePath bloqueia travessia, dependências e .env', () => {
   const projectRoot = join(tmpdir(), 'projeto-teste');
 

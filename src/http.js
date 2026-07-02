@@ -98,14 +98,26 @@ function createPayloadTooLargeError() {
   return Object.assign(new Error('Payload muito grande.'), { statusCode: 413 });
 }
 
+function createInvalidContentLengthError() {
+  return Object.assign(new Error('Content-Length inválido.'), { statusCode: 400 });
+}
+
 function parseContentLengthHeader(value) {
-  if (value === undefined || value === null || value === '') return null;
+  if (value === undefined || value === null || value === '') {
+    return { present: false, valid: true, bytes: null };
+  }
 
   const normalized = String(value).trim();
-  if (!/^\d+$/.test(normalized)) return null;
+  if (!/^\d+$/.test(normalized)) {
+    return { present: true, valid: false, bytes: null };
+  }
 
   const parsed = Number(normalized);
-  return Number.isSafeInteger(parsed) ? parsed : null;
+  if (!Number.isSafeInteger(parsed)) {
+    return { present: true, valid: false, bytes: null };
+  }
+
+  return { present: true, valid: true, bytes: parsed };
 }
 
 function isPlainJsonObject(value) {
@@ -137,7 +149,13 @@ export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = 
     }
 
     const declaredContentLength = parseContentLengthHeader(request.headers?.['content-length']);
-    if (declaredContentLength !== null && declaredContentLength > maxBodyBytes) {
+    if (!declaredContentLength.valid) {
+      fail(createInvalidContentLengthError());
+      if (destroyOnLimit && typeof request.destroy === 'function') request.destroy();
+      return;
+    }
+
+    if (declaredContentLength.bytes !== null && declaredContentLength.bytes > maxBodyBytes) {
       fail(createPayloadTooLargeError());
       if (destroyOnLimit && typeof request.destroy === 'function') request.destroy();
       return;

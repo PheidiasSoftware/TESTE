@@ -3,9 +3,39 @@ import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
 
 export const MAX_CONTEXT_FILE_PATH_CHARS = 500;
 
+const WINDOWS_RESERVED_DEVICE_NAMES = new Set([
+  'con',
+  'prn',
+  'aux',
+  'nul',
+  'com1',
+  'com2',
+  'com3',
+  'com4',
+  'com5',
+  'com6',
+  'com7',
+  'com8',
+  'com9',
+  'lpt1',
+  'lpt2',
+  'lpt3',
+  'lpt4',
+  'lpt5',
+  'lpt6',
+  'lpt7',
+  'lpt8',
+  'lpt9'
+]);
+
 function isPathInsideRoot(root, target) {
   const relativePath = relative(root, target);
   return Boolean(relativePath) && !relativePath.startsWith('..') && !isAbsolute(relativePath);
+}
+
+function isWindowsReservedPathSegment(segment) {
+  const deviceName = String(segment || '').toLowerCase().split('.', 1)[0];
+  return WINDOWS_RESERVED_DEVICE_NAMES.has(deviceName);
 }
 
 export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowedFileExtensions = [] } = {}) {
@@ -42,6 +72,10 @@ export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowe
 
   if (normalizedSegments.some(segment => blockedSegments.has(segment))) {
     throw Object.assign(new Error('Leitura bloqueada para pastas internas, dependências ou artefatos gerados.'), { statusCode: 403 });
+  }
+
+  if (normalizedSegments.some(isWindowsReservedPathSegment)) {
+    throw Object.assign(new Error('Caminho usa nome reservado do Windows.'), { statusCode: 400 });
   }
 
   const fileName = basename(relativePath).toLowerCase();

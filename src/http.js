@@ -102,6 +102,10 @@ function createInvalidContentLengthError() {
   return Object.assign(new Error('Content-Length inválido.'), { statusCode: 400 });
 }
 
+function createContentLengthMismatchError() {
+  return Object.assign(new Error('Content-Length não corresponde ao tamanho real do corpo.'), { statusCode: 400 });
+}
+
 function parseContentLengthHeader(value) {
   if (value === undefined || value === null || value === '') {
     return { present: false, valid: true, bytes: null };
@@ -179,6 +183,11 @@ export function readJsonBody(request, { maxBodyBytes = 65_536, destroyOnLimit = 
       if (settled) return;
       ended = true;
       raw += decoder.end();
+
+      if (declaredContentLength.bytes !== null && size !== declaredContentLength.bytes) {
+        fail(createContentLengthMismatchError());
+        return;
+      }
 
       if (!raw.trim()) {
         finish({});

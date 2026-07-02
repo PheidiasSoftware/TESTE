@@ -78,6 +78,8 @@ data: {"requestId":"...","error":"mensagem"}
 
 Erros de validação antes da abertura do stream continuam retornando JSON com HTTP 400/403/413/415, facilitando testes sem chamar Ollama.
 
+Os nomes de eventos SSE são normalizados pelo backend: somente letras, números, `_`, `.`, e `-` são mantidos, com limite de 64 caracteres. Isso mantém a saída previsível e evita injeção de linhas no stream.
+
 ## Exemplo com `curl`
 
 ```bash
@@ -101,6 +103,7 @@ curl.exe -N -X POST http://127.0.0.1:3131/api/generate-stream `
 - O timeout `REQUEST_TIMEOUT_MS` também se aplica ao streaming.
 - O cache continua pequeno e em memória para não crescer indefinidamente.
 - O endpoint não executa código do usuário nem código gerado.
+- Os nomes de eventos SSE são sanitizados e limitados antes da escrita no stream.
 
 ## Pendências
 

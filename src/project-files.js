@@ -37,7 +37,7 @@ export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowe
     throw Object.assign(new Error('Caminho fora da pasta do projeto não é permitido.'), { statusCode: 403 });
   }
 
-  const normalizedSegments = relativePath.split(/[\\/]+/);
+  const normalizedSegments = relativePath.split(/[\\/]+/).map(segment => segment.toLowerCase());
   const blockedSegments = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.cache']);
 
   if (normalizedSegments.some(segment => blockedSegments.has(segment))) {

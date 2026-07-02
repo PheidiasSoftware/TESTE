@@ -1,5 +1,7 @@
 import { StringDecoder } from 'node:string_decoder';
 
+const MAX_SERVER_EVENT_NAME_LENGTH = 64;
+
 export const SECURITY_HEADERS = {
   'content-security-policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   'x-content-type-options': 'nosniff',
@@ -14,7 +16,7 @@ export const SECURITY_HEADERS = {
 
 function sanitizeServerEventName(value) {
   return typeof value === 'string'
-    ? value.replace(/[^A-Za-z0-9_.-]+/g, '').trim()
+    ? value.replace(/[^A-Za-z0-9_.-]+/g, '').trim().slice(0, MAX_SERVER_EVENT_NAME_LENGTH)
     : '';
 }
 

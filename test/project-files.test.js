@@ -71,6 +71,17 @@ test('validateSafeProjectFilePath bloqueia travessia, dependências e .env', () 
   );
 });
 
+test('validateSafeProjectFilePath bloqueia pastas internas mesmo com casing diferente', () => {
+  const projectRoot = join(tmpdir(), 'projeto-teste');
+
+  for (const requestedPath of ['Node_Modules/lib/index.js', 'BUILD/app.js', '.Git/config.md', '.Cache/result.json']) {
+    assert.throws(
+      () => validateSafeProjectFilePath({ requestedPath, projectRoot, allowedFileExtensions: ['.js', '.md', '.json'] }),
+      error => error.statusCode === 403 && /Leitura bloqueada/.test(error.message)
+    );
+  }
+});
+
 test('readProjectFile lê arquivo pequeno e bloqueia arquivo acima do limite', async () => {
   const projectRoot = await mkdtemp(join(tmpdir(), 'teste-project-files-'));
 

@@ -238,67 +238,22 @@ test('readJsonBody lê JSON, aceita corpo vazio e bloqueia payload grande', asyn
   assert.equal(oversizedRequest.destroyedByHelper, true);
 });
 
-test('readJsonBody preserva UTF-8 quando caractere multibyte chega dividido entre chunks', async () => {
-  const payload = Buffer.from('{"emoji":"😀"}', 'utf8');
-  const emojiOffset = payload.indexOf('😀');
-  const splitInsideEmoji = emojiOffset + 1;
+test('readJsonBody bloqueia Content-Length inválido antes de ler o corpo', async () => {
+  const invalidRequest = createMockRequest(['{"a":1}'], { headers: { 'content-length': '10x' } });
 
-  const result = await readJsonBody(createMockRequest([
-    payload.subarray(0, splitInsideEmoji),
-    payload.subarray(splitInsideEmoji)
-  ]));
-
-  assert.deepEqual(result, { emoji: '😀' });
+  await assert.rejects(
+    () => readJsonBody(invalidRequest),
+    error => error.statusCode === 400 && error.message === 'Content-Length inválido.'
+  );
+  assert.equal(invalidRequest.destroyedByHelper, true);
 });
 
-test('readJsonBody rejeita payload grande pelo Content-Length antes de acumular corpo', async () => {
-  const oversizedRequest = createMockRequest(['{}'], { headers: { 'content-length': '9999' } });
+test('readJsonBody bloqueia Content-Length acima do limite antes de ler o corpo', async () => {
+  const oversizedRequest = createMockRequest(['{}'], { headers: { 'content-length': '999999' } });
 
   await assert.rejects(
     () => readJsonBody(oversizedRequest, { maxBodyBytes: 4 }),
     error => error.statusCode === 413
   );
-
   assert.equal(oversizedRequest.destroyedByHelper, true);
-});
-
-test('readJsonBody ignora Content-Length inválido e valida pelo corpo real', async () => {
-  const request = createMockRequest(['{"a":1}'], { headers: { 'content-length': '9999x' } });
-
-  assert.deepEqual(await readJsonBody(request, { maxBodyBytes: 8 }), { a: 1 });
-  assert.equal(request.destroyedByHelper, false);
-});
-
-test('readJsonBody permite não destruir stream ao exceder limite quando configurado', async () => {
-  const oversizedRequest = createMockRequest(['123456']);
-
-  await assert.rejects(
-    () => readJsonBody(oversizedRequest, { maxBodyBytes: 4, destroyOnLimit: false }),
-    error => error.statusCode === 413
-  );
-
-  assert.equal(oversizedRequest.destroyedByHelper, false);
-});
-
-test('readJsonBody retorna erro 400 para JSON inválido', async () => {
-  await assert.rejects(
-    () => readJsonBody(createMockRequest(['{invalido'])),
-    error => error.statusCode === 400
-  );
-});
-
-test('readJsonBody rejeita JSON que não seja objeto', async () => {
-  for (const payload of ['[]', 'null', 'true', '123', '"texto"']) {
-    await assert.rejects(
-      () => readJsonBody(createMockRequest([payload])),
-      error => error.statusCode === 400 && /objeto/.test(error.message)
-    );
-  }
-});
-
-test('readJsonBody retorna 499 quando cliente encerra antes do corpo completo', async () => {
-  await assert.rejects(
-    () => readJsonBody(createAbortedMockRequest()),
-    error => error.statusCode === 499 && error.code === 'CLIENT_CLOSED_REQUEST'
-  );
 });

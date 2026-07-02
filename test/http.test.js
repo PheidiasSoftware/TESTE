@@ -150,6 +150,11 @@ test('normalizeServerEventName remove caracteres fora do token seguro e usa fall
   assert.equal(normalizeServerEventName(null, 'safe'), 'safe');
 });
 
+test('normalizeServerEventName limita nomes SSE para manter saída previsível', () => {
+  assert.equal(normalizeServerEventName('a'.repeat(80)), 'a'.repeat(64));
+  assert.equal(normalizeServerEventName('', 'fallback-event-name-'.repeat(8)), 'fallback-event-name-'.repeat(8).slice(0, 64));
+});
+
 test('normalizeServerEventName também normaliza fallback inseguro', () => {
   assert.equal(normalizeServerEventName('', 'erro\nevent:token'), 'erroeventtoken');
   assert.equal(normalizeServerEventName('', '\n\t'), 'message');
@@ -183,6 +188,14 @@ test('sendServerEvent normaliza nome de evento SSE antes de escrever no stream',
   sendServerEvent(response, 'token\nevent: error', { token: 'abc' });
 
   assert.equal(response.chunks.join(''), 'event: tokeneventerror\ndata: {"token":"abc"}\n\n');
+});
+
+test('sendServerEvent limita nome de evento SSE antes de escrever no stream', () => {
+  const response = createMockResponse();
+
+  sendServerEvent(response, 'x'.repeat(80), { ok: true });
+
+  assert.equal(response.chunks.join(''), `event: ${'x'.repeat(64)}\ndata: {"ok":true}\n\n`);
 });
 
 test('sendServerEvent não quebra com payload SSE contendo BigInt', () => {

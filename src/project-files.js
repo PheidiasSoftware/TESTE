@@ -21,6 +21,10 @@ export function validateSafeProjectFilePath({ requestedPath, projectRoot, allowe
     throw Object.assign(new Error('Caminho inválido.'), { statusCode: 400 });
   }
 
+  if (requestedPath.length > MAX_CONTEXT_FILE_PATH_CHARS) {
+    throw Object.assign(new Error(`Caminho aceita no máximo ${MAX_CONTEXT_FILE_PATH_CHARS} caracteres.`), { statusCode: 400 });
+  }
+
   if (isAbsolute(requestedPath)) {
     throw Object.assign(new Error('Use caminho relativo ao projeto, não caminho absoluto.'), { statusCode: 400 });
   }

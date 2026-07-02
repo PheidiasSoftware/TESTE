@@ -118,144 +118,55 @@ Implementar uma melhoria pequena e segura no backend: fila simples de geração 
 
 1. Adicionar testes básicos com `node --test`.
 2. Adicionar endpoint de streaming opcional.
-3. Implementar cache simples por hash de prompt.
-4. Criar leitura segura de arquivos do projeto com limites e allowlist.
-5. Criar scripts Windows para instalação/execução.
-6. Documentar integração futura com plugin/extensão VS Code.
-7. Separar servidor e funções puras em módulos menores para facilitar testes.
 
-### Próximos passos sugeridos
-
-Na próxima execução segura, priorizar refatoração mínima para tornar funções testáveis e adicionar testes básicos com `node --test`, sem dependências externas.
-
-## 2026-06-27 22:37 - Leitura segura de arquivos do projeto
+## 2026-07-01 23:36 - Validação defensiva de Content-Length
 
 ### Avaliação inicial desta execução
 
 - Repositório analisado antes de qualquer alteração.
-- Arquivos conferidos: `README.md`, `package.json`, `src/server.js`, `test/server.test.js`, `scripts/start-windows.ps1`, `memory.md` e `PROJECT_MEMORY.md`.
-- `README.md` documentava backend local com Ollama, fila, cache, testes, script Windows, endpoints existentes e indicava leitura segura de arquivos como próximo passo.
-- `package.json` continuava sem dependências externas, com Node.js 20+ e scripts `start`, `start:windows`, `dev` e `test`.
-- `src/server.js` possuía HTTP nativo, geração via Ollama, fila, cache, timeout, limite de payload e rotas `/health`, `/api/status`, `/api/generate`.
-- `test/server.test.js` cobria prompt, fila, cache e rotas HTTP locais sem chamar Ollama.
-- `scripts/start-windows.ps1` continha inicialização conservadora para Windows, sem instalar pacotes nem baixar modelos automaticamente.
-- `PROJECT_MEMORY.md` indicava como próximo passo seguro criar leitura segura de arquivos com allowlist e limite de tamanho.
-- Não foram encontrados registros claros de Claude Agent, instruções conflitantes, branches, issues ou PRs relevantes nos arquivos analisados ou na busca textual disponível.
+- Arquivos conferidos: `README.md`, `package.json`, `src/http.js`, `src/config.js`, `test/http.test.js`, `docs/api-contract.md`, `PROJECT_MEMORY.md` e `memory.md`.
+- `README.md` confirma backend local Node.js 20+ sem dependências externas pesadas, com Ollama local, scripts Windows, testes offline, leitura segura, streaming, rate limit e documentação técnica.
+- `package.json` segue com `node --test` e sem dependências externas.
+- `src/http.js` já validava `Content-Length` inválido e acima de `MAX_BODY_BYTES`, mas ainda não rejeitava explicitamente divergência entre o valor declarado e os bytes efetivamente recebidos pelo helper.
+- PRs recentes e issues abertas foram consultados e não retornaram resultados.
+- Não foram encontrados registros acionáveis de Claude Agent ou instruções conflitantes nos arquivos lidos nesta execução.
 
 ### Decisão tomada
 
-Implementar leitura segura e limitada de arquivos textuais do próprio projeto, para permitir que a API monte contexto de programação sem executar código, sem acessar caminhos fora da raiz e sem expor arquivos sensíveis como `.env`.
-
-### Arquivos alterados
-
-- `src/server.js`
-  - Adicionados módulos nativos `node:fs/promises` e `node:path`.
-  - Adicionadas variáveis `PROJECT_ROOT`, `MAX_FILE_READ_BYTES` e `ALLOWED_FILE_EXTENSIONS`.
-  - Criada função `validateSafeProjectFilePath()` para bloquear caminho absoluto, travessia, `.git`, `node_modules`, artefatos gerados e `.env` real.
-  - Criada função `readProjectFile()` para ler apenas arquivo textual pequeno dentro da raiz permitida.
-  - Criado endpoint `POST /api/read-file`.
-  - `GET /health` e `GET /api/status` passaram a retornar configuração de leitura segura.
-  - Lista de rotas `404` atualizada.
-
-- `test/server.test.js`
-  - Adicionados testes para validação de caminho seguro.
-  - Adicionados testes para bloqueio de travessia, `node_modules` e `.env`.
-  - Adicionado teste para leitura de arquivo pequeno em diretório temporário.
-  - Adicionado teste para bloqueio por tamanho máximo.
-  - Adicionado teste HTTP para `POST /api/read-file` com caminho inválido.
-  - Ajustado teste de caminho para funcionar em Windows e Linux.
-
-- `README.md`
-  - Documentadas variáveis de leitura segura.
-  - Documentado endpoint `POST /api/read-file`.
-  - Documentadas proteções aplicadas e uso recomendado apenas para contexto, sem execução de código.
-  - Atualizadas decisões de arquitetura e próximos passos.
-
-- `memory.md`
-  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos, pendências e próximo passo.
-
-### Validações executadas
-
-- Validação estática manual do fluxo de leitura segura.
-- Conferido que a implementação usa apenas módulos nativos do Node.js e não adiciona dependências externas.
-- Conferido que a rota nova não executa arquivos, apenas lê texto limitado.
-- Conferido que caminhos absolutos, travessia, `node_modules`, `.git`, artefatos gerados e `.env` são bloqueados.
-- Conferido que os testes não chamam o Ollama.
-- Não foi possível executar `npm test` pelo conector GitHub; validação final deve ser feita localmente ou por CI futuro.
-
-### Riscos e observações
-
-- A leitura segura ainda retorna o conteúdo inteiro do arquivo permitido até o limite configurado. Para arquivos maiores, a API bloqueia em vez de truncar.
-- `PROJECT_ROOT` usa a pasta atual por padrão; o backend deve ser iniciado a partir da raiz do repositório ou com `PROJECT_ROOT` definido explicitamente.
-- A allowlist de extensões deve permanecer restrita para evitar leitura acidental de binários ou arquivos sensíveis.
-- Ainda não há CI automático para rodar `npm test` após cada commit.
-
-### Pendências atualizadas
-
-1. Executar `npm test` localmente em Windows/Node.js 20+.
-2. Testar `npm run start:windows` em Windows real com Ollama instalado.
-3. Adicionar endpoint de streaming em rota separada para respostas longas com melhor experiência.
-4. Integrar leitura segura de arquivo ao fluxo de geração com contexto controlado por lista de arquivos.
-5. Documentar integração futura com plugin/extensão VS Code.
-6. Considerar CI leve com GitHub Actions usando Node.js 20.
-
-## 2026-07-01 18:37 - Validação estrita de loopback do Ollama
-
-### Avaliação inicial desta execução
-
-- Repositório analisado antes de qualquer alteração.
-- Arquivos conferidos: `README.md`, `package.json`, `PROJECT_MEMORY.md`, `memory.md`, `src/config.js`, `src/server.js`, `test/server.test.js`, `test/config.test.js` e `docs/ollama-url-contract.md`.
-- `README.md` confirma backend Node.js nativo, sem dependências externas, com Ollama local, scripts Windows, testes offline, fila, cache, streaming SSE, leitura segura de arquivos, rate limit e documentação técnica.
-- `package.json` mantém `node --test` e scripts Windows, sem dependências pesadas.
-- `src/config.js` já restringia `HOST` e `OLLAMA_URL` para uso local, mas aceitava hosts `127.x.x.x` por regex sem validar cada octeto IPv4.
-- `src/server.js` expõe status público sanitizado, não mostra `PROJECT_ROOT` nem endpoint real do Ollama e usa logs estruturados com redaction.
-- `test/config.test.js` cobria OLLAMA_URL remoto, credenciais, query/hash e paths comuns, mas ainda não cobria IPv4 loopback malformado.
-- PRs recentes no repositório: nenhum encontrado pelo conector.
-- Não foram encontrados registros claros de Claude Agent, branches, PRs, issues ou instruções conflitantes nos arquivos consultados nesta execução.
-
-### Decisão tomada
-
-Executar uma melhoria pequena, segura e reversível na configuração local: aceitar apenas IPv4 loopback sintaticamente válido em `127.0.0.0/8` para `OLLAMA_URL`, evitando valores ambíguos como `127.999.999.999` que parecem locais, mas falhariam ou poderiam confundir diagnóstico no Windows.
+Executar melhoria pequena, segura e reversível no helper de corpo JSON: quando `Content-Length` existir, rejeitar com `400` se o tamanho real do corpo recebido não corresponder ao valor declarado. Isso fortalece o contrato HTTP local sem adicionar dependências e sem alterar o fluxo de geração/Ollama.
 
 ### Arquivos alterados/criados
 
-- `src/config.js`
-  - Criado helper interno `isValidLoopbackIPv4()`.
-  - `isAllowedLocalOllamaHost()` passou a aceitar `127.x.x.x` somente quando todos os octetos estão entre 0 e 255 e o primeiro octeto é exatamente `127`.
+- `src/http.js`
+  - Criado erro interno para divergência de `Content-Length`.
+  - `readJsonBody()` agora compara os bytes recebidos com o valor declarado antes de parsear JSON.
 
-- `test/ollama-url-loopback.test.js`
-  - Criado teste offline para aceitar `127.0.0.1`, `127.255.255.255` e `127.1.2.3`.
-  - Criado teste offline para rejeitar `127.256.0.1`, `127.999.999.999`, IPv4 incompleto, IPv4 longo e `0127.0.0.1`.
-  - Validado que `normalizeOllamaUrl()` e `loadConfig()` retornam o fallback seguro quando o loopback está malformado.
+- `test/http-content-length.test.js`
+  - Criado teste offline para aceitar `Content-Length` exato.
+  - Criados testes offline para rejeitar `Content-Length` menor e maior que o corpo real.
 
-- `docs/ollama-url-contract.md`
-  - Documentado que só são aceitos endereços IPv4 válidos em `127.0.0.0/8`.
-  - Adicionado exemplo de formato malformado que deve ser evitado.
+- `docs/api-contract.md`
+  - Documentado que `Content-Length`, quando enviado, deve ser inteiro decimal válido, respeitar `MAX_BODY_BYTES` e corresponder ao corpo real.
+  - Tabela de erros atualizada para incluir `Content-Length` incompatível em `400`.
 
 - `memory.md`
-  - Registrada esta execução com avaliação inicial, decisão, arquivos alterados, validações, riscos, pendências e próximo passo.
+  - Registrada esta execução.
 
 ### Validações executadas
 
-- Revisão estática manual dos arquivos alterados.
-- Conferido que a mudança é apenas de configuração/validação e não altera rotas, payloads, streaming, chamada ao Ollama ou leitura de arquivos.
-- Conferido que os novos testes são offline e usam apenas `node:test` e `node:assert/strict`.
-- Conferido que nenhuma dependência externa foi adicionada.
-- `npm test` não foi executado neste ambiente por ausência de checkout local autorizado; validação final deve ocorrer por CI ou em Windows/Node.js 20+.
+- Revisão estática manual das alterações.
+- Conferido que a alteração usa apenas APIs nativas do Node.js e não adiciona dependências.
+- Conferido que os testes novos não chamam Ollama, não baixam modelo e não exigem GPU.
+- Tentativa de checkout local para rodar `npm test` foi bloqueada pelo ambiente; a validação final ainda deve ocorrer localmente ou por CI.
 
 ### Riscos
 
-- Usuários que configuraram `OLLAMA_URL` com IPv4 inválido agora cairão silenciosamente para `http://127.0.0.1:11434`, que é o comportamento seguro do MVP.
-- A validação mantém `localhost`, `::1` e IPv4 válido de loopback; não habilita acesso remoto ao Ollama.
-- Ainda é necessário validar a suíte completa em ambiente local/CI.
+- Clientes que enviem `Content-Length` incorreto agora recebem `400`, comportamento intencionalmente mais estrito.
+- Em tráfego HTTP real, o runtime Node.js normalmente já ajuda a controlar framing; esta validação melhora o contrato do helper e os testes offline.
 
 ### Pendências atualizadas
 
-1. Executar `npm test` em checkout local com Node.js 20+.
-2. Testar scripts PowerShell em Windows real com Ollama instalado.
-3. Continuar endurecimento incremental de contratos HTTP/SSE e configuração local.
-4. Avaliar documentação de integração futura com cliente local/VS Code sem CORS amplo por padrão.
-
-### Próximo passo sugerido
-
-Na próxima execução segura, priorizar teste offline de `getStartupConsoleLines()` para garantir que a saída de console não exponha `PROJECT_ROOT`, `OLLAMA_URL` real ou caminhos sensíveis, mantendo a inicialização amigável para Windows.
+1. Executar `npm test` localmente ou pela CI em Node.js 20+.
+2. Testar `npm run test:windows` e `npm run smoke:windows` em Windows real com Ollama instalado.
+3. Evitar refatorações amplas até haver evidência objetiva de testes verdes.
+4. Continuar com melhorias pequenas em segurança/contrato ou revisar a prontidão final do MVP.
